@@ -124,7 +124,10 @@
       <div class="row" style="margin-top:12px;">
         <div class="field">
           <label for="sensorId">Sensor ID</label>
-          <input id="sensorId" type="text" placeholder="e.g. 12345" />
+          <select id="sensorId" disabled>
+            <option value="">Load deployed sensors first</option>
+          </select>
+          <button class="btn secondary" type="button" id="refreshSensorsBtn" style="margin-top:8px;">Refresh sensors</button>
         </div>
         <div class="field" style="flex:0 0 160px; align-self:flex-end;">
           <label>&nbsp;</label>
@@ -134,6 +137,7 @@
           <span class="pill" id="countBadge">0 results</span>
         </div>
       </div>
+      <div class="status" id="sensorStatus">Set a token and click "Refresh sensors" to load deployed sensors.</div>
       <div class="status" id="queryStatus"></div>
     </section>
 
@@ -187,6 +191,7 @@
       raw: [],
       flat: [],
       mapPoints: [],
+      sensors: [],
       ui: { sortKey: null, sortDir: 'desc', tsKey: null, filterText: '' }
     };
 
@@ -194,7 +199,7 @@
     (function initFromStorage(){
       try{
         const saved = JSON.parse(localStorage.getItem('wl_nl_client') || '{}');
-        if(saved.token){ document.getElementById('token').value = saved.token; }
+        if(saved.token){ document.getElementById('token').value = saved.token; state.token = saved.token; }
         if(saved.baseUrl){ document.getElementById('baseUrl').value = saved.baseUrl; state.baseUrl = saved.baseUrl }
         if(saved.pathTemplate){ document.getElementById('pathTemplate').value = saved.pathTemplate; state.pathTemplate = saved.pathTemplate }
         if(saved.qs){ document.getElementById('qs').value = saved.qs; state.qs = saved.qs }
@@ -210,6 +215,7 @@
         persist();
       }
       setStatus('authStatus', t ? 'Token set.' : 'No token set.', !t);
+      loadSensors({ silent: !t });
     });
 
     function persist(){
@@ -222,8 +228,103 @@
       localStorage.setItem('wl_nl_client', JSON.stringify(payload));
     }
 
-    // Query button
+    // Query button + sensor dropdown
     document.getElementById('queryBtn').addEventListener('click', runQuery);
+    const sensorSelect = document.getElementById('sensorId');
+    const refreshSensorsBtn = document.getElementById('refreshSensorsBtn');
+    if(refreshSensorsBtn){
+      refreshSensorsBtn.addEventListener('click', () => loadSensors());
+    }
+    if(document.getElementById('token').value.trim()){
+      loadSensors({ silent: true });
+    }
+
+    async function loadSensors(options = {}){
+      const { silent = false } = options;
+      if(!sensorSelect){ return; }
+      const token = state.token || document.getElementById('token').value.trim();
+      const baseInput = document.getElementById('baseUrl');
+      const baseUrl = (baseInput?.value || state.baseUrl || '').trim().replace(/\/$/, '');
+      const statusId = 'sensorStatus';
+
+      if(!token){
+        sensorSelect.disabled = true;
+        sensorSelect.innerHTML = '<option value="">Set a token first</option>';
+        if(!silent){ setStatus(statusId, 'Set a bearer token first, then refresh sensors.', true); }
+        return;
+      }
+      if(!baseUrl){
+        sensorSelect.disabled = true;
+        sensorSelect.innerHTML = '<option value="">Enter a base URL</option>';
+        if(!silent){ setStatus(statusId, 'Enter a valid base URL before loading sensors.', true); }
+        return;
+      }
+
+      if(refreshSensorsBtn){
+        refreshSensorsBtn.disabled = true;
+        refreshSensorsBtn.dataset.prevLabel = refreshSensorsBtn.textContent;
+        refreshSensorsBtn.textContent = 'Loading…';
+      }
+      sensorSelect.disabled = true;
+      sensorSelect.innerHTML = '<option value="">Loading sensors…</option>';
+      if(!silent){
+        setStatus(statusId, 'Fetching deployed sensors… <span class="spinner"></span>');
+      }
+
+      try{
+        state.baseUrl = baseUrl;
+        const res = await fetch(`${baseUrl}/borne-sensor-deployments/`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        if(!res.ok){
+          const text = await res.text();
+          throw new Error(`Sensor fetch failed (HTTP ${res.status} – ${res.statusText}). ${text ? text.slice(0, 120) : ''}`.trim());
+        }
+        const ctype = res.headers.get('content-type') || '';
+        if(!/application\/json/i.test(ctype)){
+          throw new Error(`Expected JSON but received ${ctype || 'unknown content-type'} from ${res.url}.`);
+        }
+        let json;
+        try{
+          json = await res.json();
+        }catch(parseErr){
+          throw new Error('Failed to parse deployments JSON.');
+        }
+        let items = Array.isArray(json) ? json : (json.items || json.results || json.data || json.value || []);
+        if(!Array.isArray(items)){
+          const firstArray = Object.values(json).find(v => Array.isArray(v));
+          items = firstArray || [];
+        }
+        const extractId = (item) => {
+          if(!item || typeof item !== 'object') return null;
+          return item.sensorID ?? item.sensorId ?? item.sensor?.sensorID ?? item.sensor?.sensorId ?? null;
+        };
+        const sensors = Array.from(new Set(items.map(extractId).filter(Boolean).map(String)));
+        sensors.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        if(!sensors.length){
+          throw new Error('No deployed sensors found.');
+        }
+        state.sensors = sensors;
+        const optionsHtml = sensors.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`);
+        sensorSelect.innerHTML = ['<option value="">Select a sensor</option>', ...optionsHtml].join('');
+        sensorSelect.disabled = false;
+        setStatus(statusId, `Loaded ${sensors.length} deployed sensor${sensors.length === 1 ? '' : 's'}.`);
+      }catch(err){
+        console.error(err);
+        sensorSelect.innerHTML = '<option value="">Could not load sensors</option>';
+        sensorSelect.disabled = true;
+        setStatus(statusId, escapeHtml(err.message || String(err)), true);
+      }finally{
+        if(refreshSensorsBtn){
+          refreshSensorsBtn.disabled = false;
+          refreshSensorsBtn.textContent = refreshSensorsBtn.dataset.prevLabel || 'Refresh sensors';
+        }
+      }
+    }
 
     async function runQuery(){
       // collect inputs
@@ -234,7 +335,7 @@
       const token = state.token || document.getElementById('token').value.trim();
 
       if(!token){ setStatus('queryStatus', 'Please set a bearer token first.', true); return; }
-      if(!sensorId){ setStatus('queryStatus', 'Please enter a sensor ID.', true); return; }
+      if(!sensorId){ setStatus('queryStatus', 'Please select a sensor ID.', true); return; }
 
       // Build URL
       let path = state.pathTemplate.trim();
