@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WildlifeNL – Simple API Client</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root{
+      --bg: #0b0e14;
+      --panel: #121826;
+      --text: #e5e7eb;
+      --muted: #9aa4b2;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --border: #1f2937;
+      --chip: #0f172a;
+    }
+    @media (prefers-color-scheme: light){
+      :root{ --bg:#f8fafc; --panel:#ffffff; --text:#0f172a; --muted:#475569; --accent:#16a34a; --border:#e5e7eb; --chip:#f1f5f9; }
+    }
+    *,*::before,*::after{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--text); }
+    header{ padding:20px; border-bottom:1px solid var(--border); position:sticky; top:0; background:linear-gradient(0deg, rgba(0,0,0,0) 0%, var(--bg) 20%, var(--bg) 100%); backdrop-filter:saturate(1.2) blur(6px); z-index:10; }
+    h1{ font-size:clamp(20px,2.4vw,28px); margin:0 0 8px; }
+    .subtitle{ color:var(--muted); font-size:14px; }
+    main{ max-width:1120px; margin:20px auto 80px; padding:0 16px; display:grid; gap:16px; }
+    .stack{ display:flex; flex-direction:column; gap:16px; }
+    
+    .card{ background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow: 0 10px 24px rgba(0,0,0,.15); }
+    .card h2{ margin:0 0 12px; font-size:18px; }
+    .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+    label{ display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
+    input[type="text"], input[type="password"], textarea, select{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:var(--chip); color:var(--text); outline:none; }
+    input::placeholder{ color:var(--muted); }
+    .field{ flex:1 1 320px; min-width:260px; }
+    .field.fixed{ flex:0 0 auto; min-width:auto; }
+    .field.compact{ flex:0 0 auto; min-width:auto; display:flex; gap:10px; align-items:center; }
+    @media (max-width: 900px){
+      .field{ min-width:100%; }
+      .field.fixed, .field.compact{ width:100%; }
+    }
+    .btn{ background:var(--accent); color:white; border:none; padding:10px 14px; border-radius:12px; font-weight:600; cursor:pointer; transition: transform .06s ease; }
+    .btn:active{ transform:translateY(1px); }
+    .btn.secondary{ background:#334155; }
+    .btn.danger{ background: var(--danger); }
+    .muted{ color:var(--muted); }
+    details{ border:1px dashed var(--border); border-radius:12px; padding:10px 12px; }
+    details[open]{ background: rgba(255,255,255,0.02); }
+    summary{ cursor:pointer; font-weight:600; color:var(--muted); }
+    .status{ font-size:12px; color:var(--muted); margin-top:8px; min-height:1.3em; }
+    .pill{ display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid var(--border); background:var(--chip); font-size:12px; color:var(--muted); }
+    .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius:12px; }
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    thead th{ position:sticky; top:0; background:var(--panel); border-bottom:1px solid var(--border); padding:10px; text-align:left; white-space:nowrap; }
+    tbody td{ border-top:1px solid var(--border); padding:10px; vertical-align:top; }
+    .nowrap{ white-space:nowrap; }
+    #map{ height:520px; border-radius:12px; border:1px solid var(--border); }
+    .toolbar{ display:flex; gap:8px; align-items:center; justify-content:space-between; margin:12px 0; }
+    .right{ margin-left:auto; }
+    .spinner{ width:14px; height:14px; border:2px solid var(--muted); border-top-color:transparent; border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+    details.card{ padding:0; }
+    details.card > summary{ padding:16px; margin:0; cursor:pointer; font-weight:700; font-size:18px; outline:none; border-bottom:1px solid var(--border); }
+    details.card > .content{ padding:16px; }
+    th.sortable{ cursor:pointer; }
+    th.sortable:hover{ text-decoration: underline; }
+    details.card{ padding:0; }
+    details.card > summary{ padding:16px; margin:0; cursor:pointer; font-weight:700; font-size:18px; outline:none; border-bottom:1px solid var(--border); }
+    details.card > .content{ padding:16px; }
+    th.sortable{ cursor:pointer; }
+    th.sortable:hover{ text-decoration: underline; }
+    .toggle{ display:flex; align-items:center; gap:8px; }
+    .toggle input{ transform: translateY(1px); }
+    footer{ margin:40px 0 0; text-align:center; color:var(--muted); font-size:12px; }
+    code.inline{ background:var(--chip); padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>WildlifeNL – Simple API Client</h1>
+    <div class="subtitle">Single‑file client for the <span class="nowrap">“Get BorneSensorReadings By Sensor”</span> endpoint. Paste a bearer token, enter a sensor ID, and query.</div>
+  </header>
+  <main>
+    <section class="card">
+      <h2>1) Authentication</h2>
+      <div class="row">
+        <div class="field">
+          <label for="token">Bearer token</label>
+          <input id="token" type="password" placeholder="eyJhbGciOi..." autocomplete="off" />
+        </div>
+        <div class="field fixed">
+          <label>&nbsp;</label>
+          <button class="btn" id="saveTokenBtn">Use token</button>
+        </div>
+        <div class="field compact">
+          <input id="remember" type="checkbox" /> <label for="remember" class="muted" style="margin:0">Remember token in this browser</label>
+        </div>
+      </div>
+      <div class="status" id="authStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>2) Endpoint & query</h2>
+      <details>
+        <summary>Advanced: API base URL & path template</summary>
+        <div class="row" style="margin-top:12px;">
+          <div class="field">
+            <label for="baseUrl">Base URL</label>
+            <input id="baseUrl" type="text" value="https://live-api-wildlifenl.uu.nl" />
+          </div>
+          <div class="field">
+            <label for="pathTemplate">Path template (replace <code class="inline">{id}</code> or <code class="inline">{sensorId}</code>)</label>
+            <input id="pathTemplate" type="text" value="/borne-sensor-readings/sensor/{id}" />
+          </div>
+          <div class="field">
+            <label for="qs">Optional query string (e.g. <code class="inline">?page=1&pageSize=100</code>)</label>
+            <input id="qs" type="text" value="" />
+          </div>
+        </div>
+        <p class="muted" style="margin-top:8px;">If the actual path differs, edit the template above. This app will simply send a GET request to <code class="inline">{base}{path}</code> with your Authorization header.</p>
+      </details>
+      <div class="row" style="margin-top:12px;">
+        <div class="field">
+          <label for="sensorId">Sensor ID</label>
+          <input id="sensorId" type="text" placeholder="e.g. 12345" />
+        </div>
+        <div class="field" style="flex:0 0 160px; align-self:flex-end;">
+          <label>&nbsp;</label>
+          <button class="btn" id="queryBtn">Query API</button>
+        </div>
+        <div class="field right" style="flex:0 0 auto; text-align:right;">
+          <span class="pill" id="countBadge">0 results</span>
+        </div>
+      </div>
+      <div class="status" id="queryStatus"></div>
+    </section>
+
+    <section class="stack">
+      <details class="card" open>
+        <summary>Results Table</summary>
+        <div class="content">
+          <div class="toolbar">
+            <div class="muted">Rendered as a flat table (nested objects are stringified). Click headers to sort.</div>
+            <div class="row" style="gap:8px; align-items:center;">
+              <input id="filterInput" type="text" placeholder="Filter rows" style="min-width:220px;">
+              <button class="btn secondary" id="clearFilterBtn" title="Clear filter">Clear</button>
+              <button class="btn secondary" id="copyJsonBtn" title="Copy raw JSON to clipboard">Copy JSON</button>
+              <button class="btn secondary" id="downloadCsvBtn" title="Download as CSV">Download CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap" id="tableWrap">
+            <table id="resultsTable">
+              <thead id="thead"></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="card" open>
+        <summary>Map (records with a location)</summary>
+        <div class="content">
+          <div class="toolbar">
+            <span class="muted" id="mapMeta">0 mappable records</span>
+            <label class="toggle"><input id="trackToggle" type="checkbox"> Show track</label>
+          </div>
+          <div id="map"></div>
+        </div>
+      </details>
+    </section>
+
+    <footer>
+      Built for GitHub Pages — static, no server. Uses Leaflet + OpenStreetMap. Your token stays in your browser.
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    // --- Tiny state store ----------------------------------------------------
+    const state = {
+      token: '',
+      baseUrl: 'https://live-api-wildlifenl.uu.nl',
+      pathTemplate: '/borne-sensor-readings/sensor/{id}', // edit if needed
+      qs: '',
+      raw: [],
+      flat: [],
+      mapPoints: [],
+      ui: { sortKey: null, sortDir: 'desc', tsKey: null, filterText: '' }
+    };
+
+    // Load saved token + settings
+    (function initFromStorage(){
+      try{
+        const saved = JSON.parse(localStorage.getItem('wl_nl_client') || '{}');
+        if(saved.token){ document.getElementById('token').value = saved.token; }
+        if(saved.baseUrl){ document.getElementById('baseUrl').value = saved.baseUrl; state.baseUrl = saved.baseUrl }
+        if(saved.pathTemplate){ document.getElementById('pathTemplate').value = saved.pathTemplate; state.pathTemplate = saved.pathTemplate }
+        if(saved.qs){ document.getElementById('qs').value = saved.qs; state.qs = saved.qs }
+      }catch(e){ /* ignore */ }
+    })();
+
+    // Auth handling
+    document.getElementById('saveTokenBtn').addEventListener('click', () => {
+      const t = document.getElementById('token').value.trim();
+      state.token = t;
+      const remember = document.getElementById('remember').checked;
+      if(remember){
+        persist();
+      }
+      setStatus('authStatus', t ? 'Token set.' : 'No token set.', !t);
+    });
+
+    function persist(){
+      const payload = {
+        token: document.getElementById('remember').checked ? state.token : undefined,
+        baseUrl: document.getElementById('baseUrl').value.trim(),
+        pathTemplate: document.getElementById('pathTemplate').value.trim(),
+        qs: document.getElementById('qs').value.trim()
+      };
+      localStorage.setItem('wl_nl_client', JSON.stringify(payload));
+    }
+
+    // Query button
+    document.getElementById('queryBtn').addEventListener('click', runQuery);
+
+    async function runQuery(){
+      // collect inputs
+      state.baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+      state.pathTemplate = document.getElementById('pathTemplate').value.trim();
+      state.qs = document.getElementById('qs').value.trim();
+      const sensorId = document.getElementById('sensorId').value.trim();
+      const token = state.token || document.getElementById('token').value.trim();
+
+      if(!token){ setStatus('queryStatus', 'Please set a bearer token first.', true); return; }
+      if(!sensorId){ setStatus('queryStatus', 'Please enter a sensor ID.', true); return; }
+
+      // Build URL
+      let path = state.pathTemplate.trim();
+      if(!path.startsWith('/')) path = '/' + path;
+      path = path.replace('{sensorId}', encodeURIComponent(sensorId)).replace('{id}', encodeURIComponent(sensorId));
+      let qs = state.qs ? state.qs.trim() : '';
+      if(qs && !qs.startsWith('?')) qs = '?' + qs.replace(/^\?+/, '');
+      const url = state.baseUrl + path + (qs || '');
+
+      setStatus('queryStatus', `Fetching <code class="inline">GET ${escapeHtml(url)}</code> … <span class="spinner"></span>`);
+      document.getElementById('countBadge').textContent = '—';
+
+      try{
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if(!res.ok){
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status} – ${res.statusText}\n${text.slice(0,500)}`);
+        }
+        const ctype = res.headers.get('content-type') || '';
+        let json;
+        if(!/application\/json/i.test(ctype)){
+          const text = await res.text();
+          throw new Error(`Expected JSON but got ${ctype || 'unknown content-type'} from ${res.url}. First 200 chars of response:
+` + text.slice(0,200));
+        } else {
+          try{
+            json = await res.json();
+          }catch(parseErr){
+            const text = await res.text();
+            throw new Error(`Failed to parse JSON from ${res.url}. First 200 chars:
+` + text.slice(0,200));
+          }
+        }
+        state.raw = Array.isArray(json) ? json : (json.items || json.results || json.data || json.value || []);
+        if(!Array.isArray(state.raw)){
+          const firstArray = Object.values(json).find(v => Array.isArray(v));
+          state.raw = firstArray || [];
+        }
+        // Reset UI sort to default (timestamp desc) for new dataset; keep active filter text
+        state.ui = {
+          sortKey: null,
+          sortDir: 'desc',
+          tsKey: null,
+          filterText: (document.getElementById('filterInput')?.value || '').trim()
+        }
+
+        // Flatten and render table
+        state.flat = state.raw.map(r => flatten(r));
+        renderTable(state.flat);
+
+        // Extract map points and render map markers
+        state.mapPoints = state.raw.map((r, idx) => recordToLatLng(r)).filter(Boolean);
+        updateMap(state.mapPoints, state.raw);
+
+        const count = state.raw.length;
+        document.getElementById('countBadge').textContent = `${count} result${count===1?'':'s'}`;
+        setStatus('queryStatus', `Done. Received ${count} record${count===1?'':'s'}.`);
+        persist();
+      }catch(err){
+        console.error(err);
+        const msg = String(err && err.message || err);
+        if(/TypeError: Failed to fetch/i.test(msg)){
+          setStatus('queryStatus', 'Network error. This often means a CORS block or connectivity issue. Check the browser console → Network tab for the request, and ensure the API allows CORS from this origin.', true);
+        }else{
+          setStatus('queryStatus', escapeHtml(msg), true);
+        }
+      }
+    }
+
+    // --- Table rendering -----------------------------------------------------
+    function guessTimestampKey(columns, sampleRows){
+      const prefs = ['timestamp','time','recordedAt','createdAt','updatedAt','date','Date','eventTime'];
+      for(const p of prefs){ if(columns.includes(p)) return p; }
+      const cand = columns.find(c => /time|date/i.test(c));
+      return cand || null;
+    }
+
+    function toTime(v){
+      if(v == null) return -Infinity;
+      if(typeof v === 'number') return v > 1e12 ? v : v*1000; // sec→ms heuristic
+      const t = Date.parse(String(v));
+      return isNaN(t) ? -Infinity : t;
+    }
+
+    function compareValues(a, b, isTime){
+      if(isTime){ const ta = toTime(a), tb = toTime(b); return ta === tb ? 0 : (ta < tb ? -1 : 1); }
+      const na = parseFloat(a), nb = parseFloat(b);
+      const aNum = !isNaN(na) && String(a).trim() !== '';
+      const bNum = !isNaN(nb) && String(b).trim() !== '';
+      if(aNum && bNum){ return na === nb ? 0 : (na < nb ? -1 : 1); }
+      const sa = (a ?? '').toString().toLowerCase();
+      const sb = (b ?? '').toString().toLowerCase();
+      return sa === sb ? 0 : (sa < sb ? -1 : 1);
+    }
+
+    function renderTable(baseRows){
+      const thead = document.getElementById('thead');
+      const tbody = document.getElementById('tbody');
+      thead.innerHTML = ''; tbody.innerHTML = '';
+      if(!baseRows || !baseRows.length){ return; }
+
+      const columns = Array.from(baseRows.reduce((set, row) => { Object.keys(row).forEach(k => set.add(k)); return set; }, new Set()));
+      state.columns = columns;
+
+      // Determine default sort (timestamp desc) once per dataset
+      state.ui.tsKey = guessTimestampKey(columns, baseRows);
+      if(!state.ui.sortKey){
+        state.ui.sortKey = state.ui.tsKey || columns[0];
+        state.ui.sortDir = state.ui.tsKey ? 'desc' : 'asc';
+      }
+
+      const trh = document.createElement('tr');
+      for(const c of columns){
+        const th = document.createElement('th');
+        th.className = 'sortable';
+        th.dataset.key = c;
+        th.addEventListener('click', () => {
+          if(state.ui.sortKey === c){ state.ui.sortDir = state.ui.sortDir === 'asc' ? 'desc' : 'asc'; }
+          else { state.ui.sortKey = c; state.ui.sortDir = (c === state.ui.tsKey) ? 'desc' : 'asc'; }
+          renderHeader();
+          fillBody();
+        });
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+
+      function renderHeader(){
+        thead.querySelectorAll('th').forEach(th => {
+          const key = th.dataset.key;
+          const arrow = (state.ui.sortKey === key) ? (state.ui.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+          th.textContent = key + arrow;
+        });
+      }
+
+      function getProcessedRows(){
+        let rows = baseRows.slice();
+        const q = (state.ui.filterText || '').toLowerCase();
+        if(q){
+          rows = rows.filter(row => {
+            for(const k of columns){
+              const v = row[k];
+              if(v === undefined || v === null) continue;
+              const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+              if(s.toLowerCase().includes(q)) return true;
+            }
+            return false;
+          });
+        }
+        const key = state.ui.sortKey;
+        const dir = state.ui.sortDir === 'asc' ? 1 : -1;
+        rows.sort((a, b) => compareValues(a[key], b[key], key === state.ui.tsKey) * dir);
+        return rows;
+      }
+
+      function fillBody(){
+        const rows = getProcessedRows();
+        tbody.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        for(const row of rows){
+          const tr = document.createElement('tr');
+          for(const c of columns){
+            const td = document.createElement('td');
+            const v = row[c];
+            td.textContent = typeof v === 'object' ? JSON.stringify(v) : (v ?? '');
+            tr.appendChild(td);
+          }
+          frag.appendChild(tr);
+        }
+        tbody.appendChild(frag);
+      }
+
+      renderHeader();
+      fillBody();
+    }
+
+    // Filter controls
+    const filterInput = document.getElementById('filterInput');
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+    if(filterInput){
+      filterInput.addEventListener('input', (e) => { state.ui.filterText = e.target.value.trim(); renderTable(state.flat); });
+    }
+    if(clearFilterBtn){
+      clearFilterBtn.addEventListener('click', () => { if(filterInput){ filterInput.value=''; } state.ui.filterText=''; renderTable(state.flat); });
+    }
+
+    // --- CSV / JSON helpers --------------------------------------------------
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+      if(!state.flat?.length){ return; }
+      const cols = Array.from(state.flat.reduce((s, r) => { Object.keys(r).forEach(k => s.add(k)); return s; }, new Set()));
+      const header = cols.join(',');
+      const lines = state.flat.map(r => cols.map(k => csvEscape(r[k])).join(','));
+      const csv = [header, ...lines].join('\n');
+      download('borne-sensor-readings.csv', csv, 'text/csv');
+    });
+
+    document.getElementById('copyJsonBtn').addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(JSON.stringify(state.raw, null, 2));
+        toast('Copied JSON to clipboard');
+      }catch(e){ toast('Could not copy to clipboard', true); }
+    });
+
+    function csvEscape(val){
+      if(val === undefined || val === null) return '';
+      let s = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      if(/[",\n]/.test(s)) s = '"' + s.replace(/"/g,'""') + '"';
+      return s;
+    }
+
+    function download(filename, text, mime){
+      const blob = new Blob([text], {type: mime || 'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Flatten helper ------------------------------------------------------
+    function flatten(obj, prefix=''){
+      const out = {};
+      const step = (o, pre) => {
+        if(o === null || o === undefined){ out[pre] = o; return; }
+        if(Array.isArray(o)){
+          out[pre] = o; return; // keep arrays as-is
+        }
+        if(typeof o !== 'object'){
+          out[pre] = o; return;
+        }
+        for(const [k,v] of Object.entries(o)){
+          const key = pre ? pre + '.' + k : k;
+          if(v && typeof v === 'object' && !Array.isArray(v)) step(v, key); else out[key] = v;
+        }
+      };
+      if(typeof obj === 'object' && obj){
+        for(const [k,v] of Object.entries(obj)){
+          if(v && typeof v === 'object' && !Array.isArray(v)) step(v, k); else out[k] = v;
+        }
+      }
+      return out;
+    }
+
+    // --- Map setup & helpers -------------------------------------------------
+    const map = L.map('map');
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    map.setView([52.1, 5.3], 7); // NL
+    let dotsLayer = L.layerGroup().addTo(map);
+    let lastMarker = null;
+    let trackLayer = null;
+    // Resize map when its details is toggled
+    document.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => {
+      if(d.contains(document.getElementById('map'))) setTimeout(() => map.invalidateSize(), 150);
+    }));
+
+    const trackToggle = document.getElementById('trackToggle');
+    if(trackToggle){
+      trackToggle.checked = !!(state.ui && state.ui.showTrack);
+      trackToggle.addEventListener('change', (e) => {
+        state.ui.showTrack = !!e.target.checked;
+        updateMap(state.mapPoints, state.raw);
+        setTimeout(() => map.invalidateSize(), 150);
+      });
+    }
+
+    function updateMap(points, records){
+      // Clear existing layers
+      dotsLayer.clearLayers();
+      if(lastMarker){ map.removeLayer(lastMarker); lastMarker = null; }
+      if(trackLayer){ map.removeLayer(trackLayer); trackLayer = null; }
+
+      // Build entries with timestamps
+      const tsKey = (state.ui && state.ui.tsKey) || guessTimestampKey(state.columns || [], state.flat || []);
+      const entries = (points || []).map((pt, i) => {
+        if(!pt) return null;
+        const row = state.flat?.[i] || {};
+        let tsVal = tsKey ? row[tsKey] : undefined;
+        if(tsVal == null){
+          const r = records?.[i] || {};
+          tsVal = r.timestamp || r.time || r.recordedAt || r.createdAt || r.updatedAt || r.date || r.Date || null;
+        }
+        return { i, pt, rec: records?.[i], ts: tsVal, t: toTime(tsVal) };
+      }).filter(Boolean);
+
+      // Find latest by timestamp (fallback to last item)
+      let latest = entries.filter(e => isFinite(e.t)).sort((a,b) => a.t - b.t).slice(-1)[0];
+      if(!latest && entries.length) latest = entries[entries.length - 1];
+
+      const features = [];
+
+      // Add small dot markers for all except the latest
+      entries.forEach(e => {
+        if(latest && e.i === latest.i) return; // skip latest for dot
+        const dot = L.circleMarker([e.pt.lat, e.pt.lng], { radius: 4, weight: 1, fillOpacity: 0.9 });
+        const r = e.rec;
+        const id = r?.id || r?.readingId || r?.sensorReadingId || '';
+        dot.bindPopup(`<div><strong>${escapeHtml(id || 'Record')}</strong><br/>${escapeHtml(e.ts ?? '')}</div>`);
+        dotsLayer.addLayer(dot);
+        features.push(dot);
+      });
+
+      // Add the big marker for the latest location
+      if(latest){
+        const r = latest.rec;
+        const id = r?.id || r?.readingId || r?.sensorReadingId || '';
+        lastMarker = L.marker([latest.pt.lat, latest.pt.lng]);
+        lastMarker.bindPopup(`<div><strong>Last location</strong><br/><strong>${escapeHtml(id || 'Record')}</strong><br/>${escapeHtml(latest.ts ?? '')}</div>`);
+        lastMarker.addTo(map);
+        features.push(lastMarker);
+      }
+
+      // Optional track polyline (chronological order) in nice green
+      if(state.ui && state.ui.showTrack && entries.length >= 2){
+        const ordered = entries.slice().sort((a,b) => a.t - b.t);
+        const latlngs = ordered.map(e => [e.pt.lat, e.pt.lng]);
+        trackLayer = L.polyline(latlngs, { color: '#22c55e', weight: 3, opacity: 0.9 }).addTo(map);
+        features.push(trackLayer);
+      }
+
+      // Meta + view
+      document.getElementById('mapMeta').textContent = `${entries.length} mappable record${entries.length===1?'':'s'}`;
+      if(features.length){
+        const group = L.featureGroup(features);
+        map.fitBounds(group.getBounds().pad(0.2));
+      }
+    }
+
+    
+
+    // Heuristics to detect lat/lon from varied payloads
+    function recordToLatLng(r){
+      if(!r) return null;
+      const loc = r.location || r.Location || r.loc || r.position || r.geo || r.coordinates;
+      // Case A: GeoJSON Point { type: 'Point', coordinates: [lon, lat] }
+      if(loc && typeof loc === 'object' && Array.isArray(loc.coordinates)){
+        const [lng, lat] = loc.coordinates; if(isFinite(lat) && isFinite(lng)) return {lat:+lat, lng:+lng};
+      }
+      // Case B: location object with lat/lon / latitude/longitude
+      if(loc && typeof loc === 'object'){
+        const lat = loc.lat ?? loc.latitude ?? loc.Latitude ?? loc.LAT;
+        const lng = loc.lng ?? loc.lon ?? loc.longitude ?? loc.Longitude ?? loc.LON;
+        if(isFinite(lat) && isFinite(lng)) return {lat:+lat, lng:+lng};
+      }
+      // Case C: flat fields on the root
+      const lat = r.lat ?? r.latitude ?? r.Latitude ?? r.location_lat ?? r.LocationLat;
+      const lng = r.lng ?? r.lon ?? r.longitude ?? r.Longitude ?? r.location_lon ?? r.LocationLon;
+      if(isFinite(lat) && isFinite(lng)) return {lat:+lat, lng:+lng};
+      // Case D: string "lat, lon"
+      if(typeof loc === 'string'){
+        const m = loc.trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+        if(m) return {lat:+m[1], lng:+m[2]};
+      }
+      return null;
+    }
+
+    // --- UI helpers ----------------------------------------------------------
+    function setStatus(id, html, isError=false){
+      const el = document.getElementById(id);
+      el.innerHTML = html;
+      el.style.color = isError ? 'var(--danger)' : 'var(--muted)';
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c]));
+    }
+
+    function toast(msg, isError=false){
+      const div = document.createElement('div');
+      div.textContent = msg;
+      div.style.cssText = `position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:${isError?'#ef4444':'#0ea5e9'}; color:#fff; padding:10px 14px; border-radius:999px; z-index:50; box-shadow:0 10px 24px rgba(0,0,0,.2); font-size:13px;`;
+      document.body.appendChild(div);
+      setTimeout(()=> div.remove(), 1800);
+    }
+
+    // CORS heads-up (purely informational)
+    setStatus('authStatus', 'Note: This runs entirely in your browser. The API must allow CORS for GitHub Pages.');
+  </script>
+</body>
+</html>
