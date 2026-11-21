@@ -5,7 +5,7 @@ import { leadingObjects, problemText } from "./lib.js";
 export const DEFAULT_API_URL = "https://live-api-wildlifenl.uu.nl";
 /** The name WildlifeNL shows in the login email. A token belongs to an email address and an
  * app name together, so this app gets its own token and never replaces the one Protect uses. */
-export const APP_NAME = "Smart Parks WildlifeNL check";
+export const APP_NAME = "WildlifeNL Protect";
 const TIMEOUT_MS = 30000;
 
 export class ApiError extends Error {
@@ -147,7 +147,8 @@ export class WildlifeNlClient {
     return this.list(`/detections/?${query}`);
   }
 
-  species() {
-    return this.list("/species/");
+  /** The API's own description of everything it offers and stores. */
+  openapi() {
+    return this.call("GET", "/openapi.json");
   }
 }

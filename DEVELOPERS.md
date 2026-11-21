@@ -16,6 +16,7 @@ index.html               The whole page: sign-in and a section per page
 VERSION                  The version, shown on the Account page
 assets/app.css           Design tokens and all styling
 assets/img/              Logo, favicon and sign-in photographs (from Smart Parks Protect)
+assets/img/icons/        Marker icons per species (EarthRanger's, as used in Protect)
 assets/js/theme.js       Sets the theme before the first paint
 assets/js/lib.js         Pure functions: times, tracks, metrics, buckets, CSV. No DOM, no network
 assets/js/api.js         WildlifeNlClient
@@ -24,8 +25,8 @@ assets/js/store.js       The sensors and their readings, fetched once and kept i
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
-assets/js/app.js         Sign-in, navigation and the router
-assets/js/pages/*.js     One module per page: map, sensors, sensor, explore, detections, account
+assets/js/app.js         Sign-in, the frame (top bar, folding navigation, search) and the router
+assets/js/pages/*.js     One module per page: map, sensors, sensor, explore, detections, database, about, account
 tests/lib.test.js        Unit tests for lib.js
 .nojekyll                Tells GitHub Pages to serve the files untouched
 ```
@@ -34,10 +35,26 @@ Rule of thumb: logic that can be wrong in a subtle way goes in `lib.js` with a t
 
 ## Pages and addresses
 
-The address after `#` chooses the page: `#/map`, `#/sensors`, `#/sensors/{id}`, `#/explore`, `#/detections`, `#/account`. `parseHash` and `buildHash` in `lib.js` read and write it. `app.js` shows the matching section and calls the page module's `show(route)`; on sign out it calls every module's `reset()`.
+The address after `#` chooses the page: `#/map`, `#/sensors`, `#/sensors/{id}`, `#/explore`, `#/detections`, `#/database`, `#/about`, `#/account`. `parseHash` and `buildHash` in `lib.js` read and write it. `app.js` shows the matching section and calls the page module's `show(route)`; on sign out it calls every module's `reset()`.
 
 - `#/map?sensor={id}&track=1` selects a sensor and draws its track; the page then cleans the address.
 - `#/explore?sensors=a,b&metrics=temperature,speed&range=168&bucket=1h` is the whole state of the data explorer, so a link reproduces a view.
+
+## Frame
+
+The frame follows `AppLayout.tsx` of Protect. The top bar is on every screen: the logo with the product name, the search, the server (shown when it is not the live one) and the theme switch. The navigation column folds to a narrow rail with one button; the choice is kept under `wnl-sidebar`. Below 1024 px the column is a drawer that the menu button opens.
+
+The search is a native `<dialog>`. It lists the pages and the sensors of `store.js` and filters as you type; Ctrl K or Cmd K opens it.
+
+The name of the app is `APP_NAME` in `api.js`. WildlifeNL also uses it in the login email and to tell tokens apart: one token per email address and app name. Renaming the app therefore gives people a new token at their next sign-in; a stored session keeps working.
+
+## Database page
+
+`databaseModel` in `lib.js` reads the API's OpenAPI document (`GET /openapi.json`) and returns the tables, their fields in plain words (`fieldKind`) and the links between them. A link is a field that refers to another table, or an `...ID` field named after one. Inputs (`...Record`, `...InputBody`), errors and small values inside a table (`Point`, `Accelero`) are left out.
+
+`DATA_GROUPS` in `lib.js` holds the one thing the API cannot tell: which subject a table belongs to, its name in plain words and one line of explanation. A table the API adds later shows up under "Other" with its own name until someone adds it there.
+
+`pages/database.js` draws the model as SVG: a column per subject, a box per table, a curve per link. A click on a box highlights its links and lists its fields.
 
 ## Sensors and readings
 
@@ -91,11 +108,12 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-sensors` | `localStorage` | The sensor IDs the user added by hand |
 | `wnl-map-hidden` | `localStorage` | The sensors hidden on the live map |
 | `wnl-basemap` | `localStorage` | The chosen base map |
+| `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
 
 ## Map
 
-`map.js` has two classes on a shared base. `MapView` draws the points of one page with an optional track. `LiveMap` draws a labelled marker per sensor, a coloured line and points per track, and the detections; it tells the page about clicks through callbacks. Both take their data as plain lists and rebuild their GeoJSON sources in `sources()`, so after a style change (`style.load`) the same data is drawn again.
+`map.js` has two classes on a shared base. `MapView` draws the points of one page with an optional track. `LiveMap` draws a marker per sensor, a coloured line and points per track, and the detections; it tells the page about clicks through callbacks. Markers are made the way Protect makes them (`markerImage`): a white disc with a green ring and the species icon, blue with a halo when selected, a rounded square for a sensor without an animal. The sensor source is clustered with Protect's values (radius 28 px, up to zoom 14), so markers that would overlap become one disc with a count. `MapView` can also draw a search circle and report clicks beside its points, which the detections page uses. Both take their data as plain lists and rebuild their GeoJSON sources in `sources()`, so after a style change (`style.load`) the same data is drawn again.
 
 The base maps are OpenFreeMap's `positron`, `liberty`, `bright` and `fiord`, the same as in Protect and without an API key. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves. A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for the night map.
 
@@ -128,7 +146,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, the live map with a track, the sensors list, a sensor page, the data explorer, detections, sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track, the search, the sensors list, a sensor page, the data explorer, detections, the database page, sign out, reload while signed in.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 

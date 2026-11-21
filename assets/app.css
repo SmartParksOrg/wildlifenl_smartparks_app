@@ -507,7 +507,7 @@ summary:focus-visible {
   color: var(--foreground);
 }
 
-/* App frame: the navigation column of Protect beside the page */
+/* App frame, after Protect: a navigation column that folds away, a top bar on every screen */
 
 .app {
   display: flex;
@@ -523,23 +523,33 @@ summary:focus-visible {
   background: var(--card);
 }
 
-.brand {
+.sidebar-top {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.875rem 1rem 0.5rem;
-  color: var(--foreground);
-  text-decoration: none;
+  justify-content: flex-end;
+  flex: none;
+  height: 3rem;
+  padding: 0 0.5rem;
 }
 
-.brand .logo {
-  height: 2.75rem;
-  width: auto;
+.rail {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  width: 2.5rem;
+  padding: 0.375rem 0;
+  border-right: 1px solid var(--border);
+  background: var(--card);
 }
 
-.product {
-  font-weight: 600;
-  line-height: 1.2;
+.backdrop {
+  display: none;
+}
+
+.icon.lg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .nav {
@@ -548,7 +558,7 @@ summary:focus-visible {
   flex-direction: column;
   gap: 1rem;
   min-height: 0;
-  padding: 0.75rem 0.5rem;
+  padding: 0 0.5rem 1rem;
   overflow-y: auto;
 }
 
@@ -565,12 +575,25 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
   margin-bottom: 2px;
   padding: 0.375rem 0.75rem;
+  border: 0;
   border-radius: calc(var(--radius) - 2px);
+  background: transparent;
   color: var(--foreground);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
   transition: background-color 0.15s;
+}
+
+.nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-item:hover {
@@ -583,21 +606,155 @@ summary:focus-visible {
 }
 
 .sidebar-foot {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+  flex: none;
+  padding: 0.5rem;
   border-top: 1px solid var(--border);
 }
 
-.sidebar-user {
+.main {
+  display: flex;
   flex: 1 1 0;
+  flex-direction: column;
   min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.menu-button {
+  display: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.brand .logo {
+  height: 1.75rem;
+  width: auto;
+}
+
+.product {
   overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: 0.8125rem;
+  font-size: 1rem;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.search-button {
+  justify-content: flex-start;
+  width: 14rem;
+  margin-left: 0.5rem;
+  padding: 0 0.75rem;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.search-button span {
+  flex: 1 1 0;
+  text-align: left;
+}
+
+kbd {
+  padding: 0 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+
+.app.sidebar-hidden .sidebar {
+  display: none;
+}
+
+.app.sidebar-hidden .rail {
+  display: flex;
+}
+
+/* Search */
+
+.search {
+  width: min(34rem, calc(100vw - 2rem));
+  margin-top: 12vh;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
+}
+
+.search::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.search input {
+  height: 3rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.search input:focus-visible {
+  box-shadow: none;
+  border-color: var(--border);
+}
+
+.search-results {
+  max-height: min(22rem, 50vh);
+  padding: 0.25rem;
+  overflow-y: auto;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.search-item.active,
+.search-item:hover {
+  background: var(--accent);
+}
+
+.search-item small {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-foot {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
 }
 
 .content {
@@ -816,13 +973,27 @@ a.btn {
   background: var(--muted);
 }
 
-.map-strip {
+.map-column {
   position: absolute;
   z-index: 10;
-  top: 0.75rem;
-  left: 0.75rem;
-  right: 3.5rem;
+  inset: 0.75rem 3.5rem 2.25rem 0.75rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.map-column > * {
+  pointer-events: auto;
+}
+
+.map-column > .grow {
+  pointer-events: none;
+}
+
+.map-strip {
+  display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
@@ -870,25 +1041,44 @@ a.btn {
 
 .layer-panel,
 .object-panel {
-  position: absolute;
-  z-index: 10;
-  left: 0.75rem;
   display: flex;
   flex-direction: column;
-  width: min(21rem, calc(100% - 1.5rem));
+  width: min(21rem, 100%);
   padding: 0;
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
 }
 
+/* the layers give way: they shrink and scroll, so the selected sensor always fits below */
 .layer-panel {
-  top: 3.5rem;
-  max-height: calc(100% - 4.5rem);
+  flex: 0 1 auto;
+  min-height: 9rem;
+  overflow: hidden;
 }
 
 .object-panel {
-  bottom: 2.25rem;
+  flex: none;
   gap: 0.75rem;
+  max-height: 70%;
   padding: 0.875rem 1rem 1rem;
+  overflow-y: auto;
+}
+
+.layer-icon,
+.object-icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  opacity: 0.75;
+}
+
+.object-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.dark .layer-icon,
+.dark .object-icon {
+  filter: invert(1);
 }
 
 .panel-head {
@@ -913,6 +1103,10 @@ a.btn {
   min-height: 0;
   padding: 0.75rem 1rem 1rem;
   overflow-y: auto;
+}
+
+.panel-body > * {
+  flex: none;
 }
 
 .panel-title {
@@ -941,9 +1135,7 @@ a.btn {
 .layer-list {
   display: flex;
   flex-direction: column;
-  max-height: 16rem;
   margin: 0 -0.5rem;
-  overflow-y: auto;
 }
 
 .layer-row {
@@ -1285,56 +1477,164 @@ a.btn {
   color: var(--destructive);
 }
 
-/* Phone: the navigation becomes a row above the page */
+/* Database graph */
 
-@media (max-width: 767px) {
-  .app {
-    flex-direction: column;
-  }
+.graph-scroll {
+  overflow-x: auto;
+}
 
+.graph {
+  display: block;
+  width: 100%;
+}
+
+.graph-group {
+  fill: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.graph-link {
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-width: 1.25;
+  opacity: 0.35;
+}
+
+.graph-link.on {
+  stroke: var(--foreground);
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.graph-link.off,
+.graph-box.off {
+  opacity: 0.18;
+}
+
+.graph-box {
+  cursor: pointer;
+  outline: none;
+}
+
+.graph-box rect {
+  fill: color-mix(in srgb, var(--group) 16%, var(--card));
+  stroke: var(--group);
+  stroke-width: 1.5;
+}
+
+.graph-box text {
+  fill: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.graph-box:hover rect,
+.graph-box:focus-visible rect,
+.graph-box.selected rect {
+  fill: color-mix(in srgb, var(--group) 34%, var(--card));
+  stroke-width: 2.5;
+}
+
+/* one colour per subject, the first six of Protect's chart palette */
+.g0 { --group: #52735e; }
+.g1 { --group: #d9825f; }
+.g2 { --group: #5c7fa3; }
+.g3 { --group: #b39a4a; }
+.g4 { --group: #8a6ba3; }
+.g5 { --group: #3e8e7e; }
+.g6 { --group: #8a9590; }
+
+.dot[class*=" g"] {
+  background: var(--group);
+}
+
+button.badge {
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+button.badge:hover {
+  background: var(--accent);
+}
+
+.table.wrap td {
+  white-space: normal;
+  max-width: 40rem;
+}
+
+.page-body.narrow {
+  max-width: 48rem;
+}
+
+.page-body p {
+  max-width: 44rem;
+}
+
+/* Narrow screens: the navigation is a drawer, opened from the top bar */
+
+@media (max-width: 1023px) {
   .sidebar {
-    flex-direction: row;
-    align-items: center;
-    width: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    position: fixed;
+    z-index: 50;
+    inset: 0 auto 0 0;
+    width: 18rem;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.2s;
   }
 
-  .brand {
-    padding: 0.375rem 0.25rem 0.375rem 0.75rem;
+  .app.sidebar-hidden .sidebar {
+    display: flex;
   }
 
-  .brand .logo {
-    height: 1.75rem;
-  }
-
-  .product,
-  .nav-label,
-  .sidebar-user {
+  .app.sidebar-hidden .rail {
     display: none;
   }
 
-  .nav {
-    flex-direction: row;
+  .app.drawer-open .sidebar {
+    transform: none;
+    box-shadow: 0 0 40px rgb(0 0 0 / 0.3);
+  }
+
+  .app.drawer-open .backdrop {
+    display: block;
+    position: fixed;
+    z-index: 40;
+    inset: 0;
+    background: rgb(0 0 0 / 0.4);
+  }
+
+  .menu-button {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  .topbar {
     gap: 0.25rem;
-    padding: 0.375rem 0.25rem;
-    overflow-x: auto;
-    overflow-y: hidden;
+    padding: 0.25rem 0.5rem;
   }
 
-  .nav-section {
-    display: flex;
-    gap: 0.25rem;
+  .product {
+    font-size: 0.875rem;
   }
 
-  .nav-item {
-    margin: 0;
-    white-space: nowrap;
+  .search-button {
+    width: 2.25rem;
+    margin-left: auto;
+    padding: 0;
+    justify-content: center;
   }
 
-  .sidebar-foot {
-    padding: 0 0.25rem;
-    border-top: 0;
+  .search-button span,
+  .search-button kbd,
+  .topbar > .grow {
+    display: none;
   }
 
   .page-header,
@@ -1344,8 +1644,8 @@ a.btn {
     padding-right: 1rem;
   }
 
-  .object-panel {
-    bottom: 2rem;
+  .map-column {
+    inset: 0.5rem 3.25rem 2rem 0.5rem;
   }
 
   .facts {
@@ -1356,6 +1656,7 @@ a.btn {
   .facts dd {
     margin-bottom: 0.5rem;
   }
+
   .object-panel .facts {
     grid-template-columns: max-content 1fr;
     gap: 0.25rem 1.25rem;

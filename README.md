@@ -1,4 +1,4 @@
-# Smart Parks WildlifeNL check
+# WildlifeNL Protect
 
 A small web app that shows what the [WildlifeNL](https://wildlifenl.nl) data platform holds: sensor readings and detections, on a map and in a table. Smart Parks uses it to check by hand that the data [Smart Parks Protect](https://github.com/SmartParksOrg/smartparks-protect) sends to WildlifeNL has arrived.
 
@@ -16,10 +16,14 @@ The pages follow the structure of Smart Parks Protect: a live map, a list with a
 | Sensors | Every sensor with its animal, last reading, last position and number of readings | The same |
 | Sensor page | Everything WildlifeNL holds for one sensor: facts, latest values, the track, charts and every reading | The same |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per sensor | The same |
-| Detections | Camera trap and other detections in a period and a circle of at most 10 km | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
+| Detections | Camera trap and other detections in a period and a circle of at most 10 km; click the map to move the circle | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
+| Database | What WildlifeNL stores and how it hangs together, as a drawing with a plain explanation per kind of record | Any account |
 | Account | Your profile, your roles and what they allow | Any account |
+| About | What the app is, with links | Any account |
 
 Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The app has a light and a dark theme and works on a phone.
+
+The frame is the one of Protect: a top bar with the search (Ctrl K finds a sensor, an animal or a page) and a navigation column that folds away. On a narrow screen the navigation opens from the menu button.
 
 ### Where the sensors come from
 
@@ -28,7 +32,8 @@ WildlifeNL lets only `herd-manager` accounts list the deployed sensors. Those ac
 ### Live map
 
 - **Base map:** Light, Streets, Bright or Night; the default follows the theme.
-- **Layers:** tick a sensor to show or hide it, search by name or ID, and use the route button to draw its track. Up to eight tracks at a time, each in its own colour. The track length is 24 hours to everything.
+- **Markers:** the icon of the species in a ring, a rounded square for a sensor without an animal. Sensors that would overlap become one disc with a number; click it to zoom in.
+- **Layers:** tick a sensor to show or hide it, search by name or ID, use the route button to draw its track and the target button to go to it. Up to eight tracks at a time, each in its own colour. The track length, 24 hours to everything, is in the bar above the map.
 - **Click a marker** for the sensor's panel: last seen, position, temperature, links to the sensor page and its data, and the track button.
 - **Click a track point** for the time and the values of that fix.
 
@@ -73,4 +78,4 @@ Run the tests with `npm test` (Node 20 or newer, nothing to install).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The Smart Parks logo and the photographs under `assets/img/` belong to Smart Parks and are not covered by the MIT license.
+MIT, see [LICENSE](LICENSE). The Smart Parks logo and the photographs under `assets/img/` belong to Smart Parks and are not covered by the MIT license. The marker icons under `assets/img/icons/` are EarthRanger's, under the Apache License 2.0; see the README in that folder.

@@ -4,7 +4,6 @@ import { SCOPES } from "../api.js";
 import { account, explain, hasScope, refreshProfile, signOut } from "../session.js";
 import { $, busy, el, facts, toast } from "../ui.js";
 
-let version = "";
 let wired = false;
 
 function draw() {
@@ -13,6 +12,7 @@ function draw() {
     ["Name", session.name || "Not set"],
     ["Email address", session.email || "Unknown"],
     ["User ID", session.userID || "Unknown"],
+    ["Server", new URL(session.baseUrl).host],
     ["Roles", session.scopes.length ? el("span", { class: "row" }, session.scopes.map((scope) => el("span", { class: "badge", text: scope }))) : "None. The account can sign in but reads only what every user may read."],
   ]);
   const access = [
@@ -31,22 +31,10 @@ function draw() {
       }),
     ),
   );
-  facts($("aboutFacts"), [
-    ["WildlifeNL API", el("a", { href: `${session.baseUrl}/`, target: "_blank", rel: "noopener", text: session.baseUrl })],
-    ["App version", version || "Unknown"],
-    ["Source", el("a", { href: "https://github.com/SmartParksOrg/wildlifenl_smartparks_app", target: "_blank", rel: "noopener", text: "github.com/SmartParksOrg/wildlifenl_smartparks_app" })],
-  ]);
 }
 
 function wire() {
   wired = true;
-  fetch("VERSION")
-    .then((response) => (response.ok ? response.text() : ""))
-    .then((text) => {
-      version = text.trim();
-      if (account.session && !$("view-account").hidden) draw();
-    })
-    .catch(() => {});
   $("signOutButton2").addEventListener("click", () => signOut());
   $("copyToken").addEventListener("click", async () => {
     try {

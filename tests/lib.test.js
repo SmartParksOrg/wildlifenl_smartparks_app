@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -138,4 +138,54 @@ test("leadingObjects reads the whole objects of a cut-off array", () => {
   assert.deepEqual(leadingObjects('[{"a":1},{"b":"cut'), [{ a: 1 }]);
   assert.deepEqual(leadingObjects("null"), []);
   assert.deepEqual(leadingObjects(""), []);
+});
+
+test("speciesIcon picks an icon by the Latin name", () => {
+  assert.equal(speciesIcon("Canis lupus"), "wolf");
+  assert.equal(speciesIcon("Canis aureus"), "canid");
+  assert.equal(speciesIcon("Vulpes vulpes"), "canid");
+  assert.equal(speciesIcon("Sus scrofa"), "wild_boar");
+  assert.equal(speciesIcon(" Bos taurus "), "cow");
+  assert.equal(speciesIcon("Castor fiber"), "generic");
+  assert.equal(speciesIcon(""), "sensor");
+});
+
+test("fieldKind describes a field in plain words", () => {
+  assert.equal(fieldKind({ type: "string", format: "date-time" }), "date and time");
+  assert.equal(fieldKind({ type: "string", format: "uuid" }), "ID");
+  assert.equal(fieldKind({ type: ["string", "null"], enum: ["visual", "acoustic"] }), "one of: visual, acoustic");
+  assert.equal(fieldKind({ type: "number", format: "double" }), "number");
+  assert.equal(fieldKind({ type: "boolean" }), "yes or no");
+  assert.equal(fieldKind({ $ref: "#/components/schemas/Point" }), "place on the map");
+  assert.equal(fieldKind({ type: ["array", "null"], items: { $ref: "#/components/schemas/Point" } }), "outline on the map");
+  assert.equal(fieldKind({ type: ["array", "null"], items: { $ref: "#/components/schemas/BorneSensorReading" } }, () => "Sensor reading"), "list of sensor readings");
+});
+
+test("databaseModel finds the tables, their fields and their links", () => {
+  const ref = (name) => ({ $ref: `#/components/schemas/${name}` });
+  const model = databaseModel({
+    paths: { "/gadget/{id}": { get: { responses: { 200: { content: { "application/json": { schema: ref("Gadget") } } } } } } },
+    components: {
+      schemas: {
+        Point: { properties: { latitude: { type: "number" }, longitude: { type: "number" } } },
+        Species: { properties: { ID: { type: "string", format: "uuid" }, name: { type: "string", description: "The Latin binomen." } } },
+        Animal: { properties: { $schema: { type: "string" }, ID: { type: "string", format: "uuid" }, species: ref("Species"), speciesID: { type: "string", writeOnly: true }, location: ref("Point") } },
+        AnimalRecord: { properties: { ID: { type: "string" } } },
+        BorneSensorDeployment: { properties: { sensorID: { type: "string" }, animal: ref("Animal"), borneSensorReadings: { type: ["array", "null"], items: ref("BorneSensorReading") } } },
+        BorneSensorReading: { properties: { sensorID: { type: "string" }, userID: { type: "string" }, location: ref("Point") } },
+        User: { properties: { ID: { type: "string" }, name: { type: "string" } } },
+        Gadget: { properties: { ID: { type: "string" }, userID: { type: "string" } } },
+        ErrorModel: { properties: { ID: { type: "string" } } },
+      },
+    },
+  });
+  assert.deepEqual(model.tables.map((t) => t.name), ["Species", "Animal", "BorneSensorDeployment", "BorneSensorReading", "User", "Gadget"]);
+  assert.deepEqual(model.groups, ["Animals and sensors", "People", "Areas", "Reports", "Alarms and messages", "Research", "Other"]);
+  const animal = model.tables.find((t) => t.name === "Animal");
+  assert.equal(animal.label, "Animal");
+  assert.deepEqual(animal.fields.map((f) => [f.name, f.kind, f.link]), [["ID", "ID", ""], ["species", "species", "Species"], ["location", "place on the map", ""]]);
+  assert.equal(model.tables.find((t) => t.name === "Gadget").group, 6);
+  assert.equal(model.tables.find((t) => t.name === "Species").fields[1].description, "The Latin binomen.");
+  const pairs = model.links.map((l) => `${l.from}>${l.to}${l.many ? "*" : ""}`).sort();
+  assert.deepEqual(pairs, ["Animal>Species", "BorneSensorDeployment>Animal", "BorneSensorDeployment>BorneSensorReading*", "BorneSensorReading>User", "Gadget>User"]);
 });

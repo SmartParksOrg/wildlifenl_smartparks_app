@@ -4,6 +4,27 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.2.0 - 2026-11-21
+
+### Added
+
+- Database page: what WildlifeNL stores and how it hangs together, drawn from the API's own description, with a plain explanation per kind of record.
+- About page with links.
+- Search in the top bar (Ctrl K) for sensors, animals and pages.
+- Marker icons per species and grouping of markers that overlap, as on the live map of Protect.
+- A search circle on the detections map; a click moves it.
+
+### Changed
+
+- The app is called WildlifeNL Protect. WildlifeNL keys a token on the app name, so the next sign-in gives a new token; a stored session keeps working.
+- The frame is the one of Protect: a top bar on every screen and a navigation column that folds away, a drawer on narrow screens.
+- The layers and the selected sensor share the left side of the map and no longer cover each other. The track length moved to the bar above the map.
+- The detections page starts at the sensors and looks back 30 days.
+
+### Fixed
+
+- Detections did not load with the old default of 200 km: the API accepts a radius of at most 10 km.
+
 ## 2.1.0 - 2026-11-21
 
 The app now has the structure of Smart Parks Protect: a live map, a list with a page per sensor, and a data explorer.

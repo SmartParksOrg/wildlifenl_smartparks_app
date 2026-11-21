@@ -1,5 +1,5 @@
 {
-  "name": "wildlifenl-smartparks-app",
+  "name": "wildlifenl-protect",
   "private": true,
   "type": "module",
   "description": "Static web app that shows the sensor readings and detections WildlifeNL holds. No dependencies, no build step.",

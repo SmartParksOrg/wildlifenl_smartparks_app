@@ -2,16 +2,18 @@
 // pages/ and exports `show(route)` and `reset()`.
 
 import { APP_NAME, ApiError, DEFAULT_API_URL, WildlifeNlClient } from "./api.js";
-import { parseHash } from "./lib.js";
+import { buildHash, parseHash } from "./lib.js";
+import * as aboutPage from "./pages/about.js";
 import * as accountPage from "./pages/account.js";
+import * as databasePage from "./pages/database.js";
 import * as detectionsPage from "./pages/detections.js";
 import * as explorePage from "./pages/explore.js";
 import * as mapPage from "./pages/map.js";
 import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
 import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
-import { resetStore } from "./store.js";
-import { $, busy, note, toast } from "./ui.js";
+import { loadSensors, resetStore } from "./store.js";
+import { $, busy, el, icon, note, toast } from "./ui.js";
 
 /** The section of each page, its module and the navigation entry it lights up. */
 const PAGES = {
@@ -20,6 +22,8 @@ const PAGES = {
   sensor: { view: "sensor", module: sensorPage, nav: "sensors", title: "Sensor" },
   explore: { view: "explore", module: explorePage, nav: "explore", title: "Data explorer" },
   detections: { view: "detections", module: detectionsPage, nav: "detections", title: "Detections" },
+  database: { view: "database", module: databasePage, nav: "database", title: "Database" },
+  about: { view: "about", module: aboutPage, nav: "about", title: "About" },
   account: { view: "account", module: accountPage, nav: "account", title: "Account" },
 };
 
@@ -166,12 +170,126 @@ function route() {
   });
 }
 
+function drawAccount() {
+  const { session } = account;
+  $("sidebarUser").textContent = session.email || "Account";
+  const host = new URL(session.baseUrl).host;
+  const chip = $("serverChip");
+  chip.textContent = host.startsWith("test-") ? "Test server" : host.startsWith("live-") ? "" : host;
+  chip.title = `Connected to ${host}`;
+}
+
 function showApp() {
   $("auth").hidden = true;
   $("app").hidden = false;
-  $("sidebarUser").textContent = account.session.email;
-  $("sidebarUser").title = account.session.email;
+  drawAccount();
   route();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Navigation column: folds away on a wide screen, slides in as a drawer on a narrow one
+
+const SIDEBAR_KEY = "wnl-sidebar";
+
+function wireSidebar() {
+  const app = $("app");
+  const fold = (hidden) => {
+    app.classList.toggle("sidebar-hidden", hidden);
+    try {
+      localStorage.setItem(SIDEBAR_KEY, hidden ? "hidden" : "shown");
+    } catch {
+      /* the choice lasts for this page only */
+    }
+  };
+  let stored = "";
+  try {
+    stored = localStorage.getItem(SIDEBAR_KEY);
+  } catch {
+    /* shown by default */
+  }
+  app.classList.toggle("sidebar-hidden", stored === "hidden");
+  const drawer = (open) => app.classList.toggle("drawer-open", open);
+  // the same button folds the column on a wide screen and closes the drawer on a narrow one
+  $("sidebarHide").addEventListener("click", () => (app.classList.contains("drawer-open") ? drawer(false) : fold(true)));
+  $("sidebarShow").addEventListener("click", () => fold(false));
+  $("menuButton").addEventListener("click", () => drawer(true));
+  $("sidebarBackdrop").addEventListener("click", () => drawer(false));
+  $("sidebar").addEventListener("click", (event) => {
+    if (event.target.closest(".nav-item")) drawer(false);
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Search: pages, sensors and animals, opened from the top bar or with Ctrl K
+
+const search = { items: [], shown: [], active: 0 };
+
+function drawSearch() {
+  const query = $("searchInput").value.trim().toLowerCase();
+  search.shown = search.items.filter((item) => !query || `${item.label} ${item.sub}`.toLowerCase().includes(query)).slice(0, 30);
+  search.active = Math.min(search.active, Math.max(0, search.shown.length - 1));
+  $("searchResults").replaceChildren(
+    ...(search.shown.length
+      ? search.shown.map((item, index) =>
+          el("a", { class: `search-item${index === search.active ? " active" : ""}`, href: item.href, role: "option", "aria-selected": String(index === search.active), onclick: () => $("searchDialog").close() }, [
+            icon(item.icon),
+            el("span", { text: item.label }),
+            el("small", { text: item.sub }),
+          ]),
+        )
+      : [el("div", { class: "picker-empty", text: "Nothing found." })]),
+  );
+  const active = $("searchResults").querySelector(".active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+}
+
+async function openSearch() {
+  if (!account.session || $("searchDialog").open) return;
+  const pages = Object.entries(PAGES)
+    .filter(([key]) => key !== "sensor")
+    .map(([key, page]) => ({ label: page.title, sub: "Page", icon: "search", href: buildHash(key) }));
+  search.items = pages;
+  search.active = 0;
+  $("searchInput").value = "";
+  $("searchDialog").showModal();
+  drawSearch();
+  try {
+    const sensors = await loadSensors();
+    search.items = [...sensors.map((s) => ({ label: s.name, sub: [s.name !== s.id ? s.id : "", s.species, "Sensor"].filter(Boolean).join(" · "), icon: "sensor", href: buildHash("sensors", s.id) })), ...pages];
+    drawSearch();
+  } catch (error) {
+    explain(error);
+  }
+}
+
+function wireSearch() {
+  $("searchButton").addEventListener("click", openSearch);
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      openSearch();
+    }
+  });
+  const dialog = $("searchDialog");
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close(); // a click on the backdrop
+  });
+  $("searchInput").addEventListener("input", () => {
+    search.active = 0;
+    drawSearch();
+  });
+  $("searchInput").addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const count = search.shown.length;
+      if (count) search.active = (search.active + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
+      drawSearch();
+    } else if (event.key === "Enter" && search.shown[search.active]) {
+      event.preventDefault();
+      location.hash = search.shown[search.active].href;
+      dialog.close();
+    }
+  });
 }
 
 const THEMES = { system: ["monitor", "Theme: follows the device"], light: ["sun", "Theme: light"], dark: ["moon", "Theme: dark"] };
@@ -186,6 +304,8 @@ function drawThemeButton() {
 
 async function start() {
   wireAuth();
+  wireSidebar();
+  wireSearch();
   drawThemeButton();
   $("themeButton").addEventListener("click", () => {
     const order = Object.keys(THEMES);
@@ -195,6 +315,7 @@ async function start() {
   $("signOutButton").addEventListener("click", () => signOut());
   window.addEventListener("hashchange", route);
   account.onSignOut = (message) => {
+    if ($("searchDialog").open) $("searchDialog").close();
     resetStore();
     for (const page of Object.values(PAGES)) page.module.reset();
     showAuth(message);
@@ -211,7 +332,7 @@ async function start() {
   try {
     const before = account.session.scopes.join();
     await refreshProfile();
-    $("sidebarUser").textContent = account.session.email;
+    drawAccount();
     if (account.session.scopes.join() !== before) {
       // the roles changed since the last visit, so what the account may list changed too
       resetStore();

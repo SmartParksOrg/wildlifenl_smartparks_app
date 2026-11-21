@@ -12,7 +12,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; font-src 'self' https:; connect-src 'self' https:; worker-src blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
-    <title>Smart Parks WildlifeNL check</title>
+    <title>WildlifeNL Protect</title>
     <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
     <script src="assets/js/theme.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.css" integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous" />
@@ -28,6 +28,14 @@
         <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13" /></symbol>
         <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3" /><path d="M9 19h8.500a3.500 3.500 0 0 0 0-7h-11a3.500 3.500 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" /></symbol>
         <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-5.500 10.200-7.400 11.800a1 1 0 0 1-1.200 0C9.500 20.200 4 15 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.300-4.300" /></symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></symbol>
+        <symbol id="i-panel-close" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M16 15l-3-3 3-3" /></symbol>
+        <symbol id="i-panel-open" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M14 9l3 3-3 3" /></symbol>
+        <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0" /></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></symbol>
+        <symbol id="i-locate" viewBox="0 0 24 24"><path d="M2 12h3M19 12h3M12 2v3M12 19v3" /><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" /></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5" /></symbol>
         <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></symbol>
@@ -46,7 +54,7 @@
       <div class="card auth-card">
         <img class="logo logo-light" src="assets/img/logo-landscape.webp" alt="Smart Parks" width="224" />
         <img class="logo logo-dark" src="assets/img/logo-landscape-white.webp" alt="Smart Parks" width="224" />
-        <h1 class="card-title">WildlifeNL check</h1>
+        <h1 class="card-title">WildlifeNL Protect</h1>
         <p class="card-description" id="authDescription">Sign in with your WildlifeNL account. You get a code by email, no password needed.</p>
 
         <form id="emailForm" class="stack" novalidate>
@@ -102,12 +110,10 @@
     </main>
 
     <div id="app" class="app" hidden>
-      <aside class="sidebar">
-        <a class="brand" href="#/map" aria-label="Smart Parks WildlifeNL check">
-          <img class="logo logo-light" src="assets/img/logo-landscape.webp" alt="" height="44" />
-          <img class="logo logo-dark" src="assets/img/logo-landscape-white.webp" alt="" height="44" />
-          <span class="product">WildlifeNL check</span>
-        </a>
+      <aside class="sidebar" id="sidebar" aria-label="Navigation">
+        <div class="sidebar-top">
+          <button class="btn ghost icon" type="button" id="sidebarHide" aria-label="Hide navigation" title="Hide navigation"><svg class="icon lg"><use href="#i-panel-close" /></svg></button>
+        </div>
         <nav class="nav" aria-label="Pages">
           <div class="nav-section">
             <div class="nav-label">Monitor</div>
@@ -118,67 +124,86 @@
           <div class="nav-section">
             <div class="nav-label">Analyze</div>
             <a class="nav-item" href="#/explore" data-view="explore"><svg class="icon"><use href="#i-chart" /></svg><span>Data explorer</span></a>
-          </div>
-          <div class="nav-section">
-            <div class="nav-label">Settings</div>
-            <a class="nav-item" href="#/account" data-view="account"><svg class="icon"><use href="#i-user" /></svg><span>Account</span></a>
+            <a class="nav-item" href="#/database" data-view="database"><svg class="icon"><use href="#i-database" /></svg><span>Database</span></a>
           </div>
         </nav>
         <div class="sidebar-foot">
-          <span class="sidebar-user" id="sidebarUser"></span>
-          <button class="btn ghost icon" type="button" id="themeButton" aria-label="Theme"><svg class="icon"><use href="#i-monitor" /></svg></button>
-          <button class="btn ghost icon" type="button" id="signOutButton" aria-label="Sign out" title="Sign out"><svg class="icon"><use href="#i-logout" /></svg></button>
+          <a class="nav-item" href="#/about" data-view="about"><svg class="icon"><use href="#i-info" /></svg><span>About</span></a>
+          <a class="nav-item" href="#/account" data-view="account"><svg class="icon"><use href="#i-user" /></svg><span id="sidebarUser">Account</span></a>
+          <button class="nav-item" type="button" id="signOutButton"><svg class="icon"><use href="#i-logout" /></svg><span>Sign out</span></button>
         </div>
       </aside>
+      <div class="rail" id="sidebarRail">
+        <button class="btn ghost icon" type="button" id="sidebarShow" aria-label="Show navigation" title="Show navigation"><svg class="icon lg"><use href="#i-panel-open" /></svg></button>
+      </div>
+      <div class="backdrop" id="sidebarBackdrop"></div>
+
+      <div class="main">
+        <header class="topbar">
+          <button class="btn ghost icon menu-button" type="button" id="menuButton" aria-label="Open navigation"><svg class="icon lg"><use href="#i-menu" /></svg></button>
+          <a class="brand" href="#/map" aria-label="WildlifeNL Protect, to the live map">
+            <img class="logo logo-light" src="assets/img/logo-landscape.webp" alt="" height="28" />
+            <img class="logo logo-dark" src="assets/img/logo-landscape-white.webp" alt="" height="28" />
+            <span class="product">WildlifeNL Protect</span>
+          </a>
+          <button class="btn outline search-button" type="button" id="searchButton" aria-label="Search…" title="Search…">
+            <svg class="icon"><use href="#i-search" /></svg><span>Search…</span><kbd>Ctrl K</kbd>
+          </button>
+          <span class="grow"></span>
+          <span class="chip" id="serverChip"></span>
+          <button class="btn ghost icon" type="button" id="themeButton" aria-label="Theme"><svg class="icon"><use href="#i-monitor" /></svg></button>
+        </header>
 
       <main class="content" id="content">
         <!-- Live map -->
         <section class="view bleed" id="view-map" hidden>
           <div class="live-map" id="liveMap"></div>
-          <div class="map-strip">
-            <label class="strip-item">
-              <svg class="icon"><use href="#i-layers" /></svg>
-              <select id="mapBasemap" aria-label="Base map"></select>
-            </label>
-            <button class="btn outline strip-button" type="button" id="mapLayersButton" aria-expanded="false"><svg class="icon"><use href="#i-list" /></svg>Layers</button>
-            <span class="chip" id="mapCount"></span>
-            <span class="strip-item" id="mapTracks" hidden>
-              <span id="mapTracksText"></span>
-              <button class="btn link" type="button" id="mapClearTracks">Clear tracks</button>
-            </span>
-          </div>
-          <div class="card layer-panel" id="layerPanel" hidden>
-            <div class="panel-head">
-              <strong>Map layers</strong>
-              <button class="btn link" type="button" id="layerReset">Reset</button>
-              <button class="btn ghost icon sm" type="button" id="layerClose" aria-label="Close"><svg class="icon"><use href="#i-x" /></svg></button>
-            </div>
-            <div class="panel-body">
-              <div class="panel-title"><span>Sensors</span><span class="panel-actions"><button class="btn link" type="button" id="layerShowAll">Show all</button><button class="btn link" type="button" id="layerHideAll">Hide all</button></span></div>
-              <input type="search" id="layerSearch" placeholder="Search…" aria-label="Search sensors" />
-              <div class="layer-list" id="layerList"></div>
-              <form class="inline-form" id="layerAddForm">
-                <input type="text" id="layerAddInput" placeholder="Add a sensor by its ID" aria-label="Sensor ID" spellcheck="false" autocomplete="off" required minlength="2" />
-                <button class="btn outline" type="submit">Add</button>
-              </form>
-              <div class="panel-title"><span>Tracks</span></div>
-              <label class="field">
-                <span>Track length</span>
-                <select id="mapTrackHours">
-                  <option value="24">Last 24 hours</option>
-                  <option value="168" selected>Last 7 days</option>
-                  <option value="720">Last 30 days</option>
-                  <option value="2160">Last 90 days</option>
-                  <option value="all">Everything</option>
-                </select>
+          <!-- one column over the map: the strip, the layers and the selected sensor share its
+               height, so the two panels never cover each other -->
+          <div class="map-column">
+            <div class="map-strip">
+              <label class="strip-item" title="Base map">
+                <svg class="icon"><use href="#i-layers" /></svg>
+                <select id="mapBasemap" aria-label="Base map"></select>
               </label>
-              <div id="layerDetections">
-                <div class="panel-title"><span>Detections</span></div>
-                <label class="check"><input type="checkbox" id="mapDetections" /><span>Detections of the last 7 days, within 10 km of the map centre</span></label>
+              <button class="btn outline strip-button" type="button" id="mapLayersButton" aria-expanded="false"><svg class="icon"><use href="#i-list" /></svg>Layers</button>
+              <span class="chip" id="mapCount"></span>
+              <span class="strip-item" id="mapTracks" hidden>
+                <svg class="icon"><use href="#i-route" /></svg>
+                <span id="mapTracksText"></span>
+                <select id="mapTrackHours" aria-label="Track length" title="Track length">
+                  <option value="24">24 hours</option>
+                  <option value="168" selected>7 days</option>
+                  <option value="720">30 days</option>
+                  <option value="2160">90 days</option>
+                  <option value="all">everything</option>
+                </select>
+                <button class="btn ghost icon sm" type="button" id="mapClearTracks" aria-label="Clear tracks" title="Clear tracks"><svg class="icon"><use href="#i-x" /></svg></button>
+              </span>
+            </div>
+            <div class="card layer-panel" id="layerPanel" hidden>
+              <div class="panel-head">
+                <strong>Map layers</strong>
+                <button class="btn link" type="button" id="layerReset">Reset</button>
+                <button class="btn ghost icon sm" type="button" id="layerClose" aria-label="Close"><svg class="icon"><use href="#i-x" /></svg></button>
+              </div>
+              <div class="panel-body">
+                <div class="panel-title"><span>Sensors</span><span class="panel-actions"><button class="btn link" type="button" id="layerShowAll">Show all</button><button class="btn link" type="button" id="layerHideAll">Hide all</button></span></div>
+                <input type="search" id="layerSearch" placeholder="Search…" aria-label="Search sensors" />
+                <div class="layer-list" id="layerList"></div>
+                <form class="inline-form" id="layerAddForm">
+                  <input type="text" id="layerAddInput" placeholder="Add a sensor by its ID" aria-label="Sensor ID" spellcheck="false" autocomplete="off" required minlength="2" />
+                  <button class="btn outline" type="submit">Add</button>
+                </form>
+                <div id="layerDetections">
+                  <div class="panel-title"><span>Detections</span></div>
+                  <label class="check"><input type="checkbox" id="mapDetections" /><span>Last 7 days, within 10 km of the map centre</span></label>
+                </div>
               </div>
             </div>
+            <span class="grow"></span>
+            <div class="card object-panel" id="objectPanel" hidden></div>
           </div>
-          <div class="card object-panel" id="objectPanel" hidden></div>
           <div class="callout map-note" id="mapNote" hidden></div>
         </section>
 
@@ -309,15 +334,15 @@
             <form class="card form-grid" id="detectionsForm">
               <label class="field"><span>From</span><input id="detectionsFrom" type="datetime-local" required /></label>
               <label class="field"><span>To</span><input id="detectionsTo" type="datetime-local" required /></label>
-              <label class="field"><span>Latitude</span><input id="detectionsLat" type="number" step="any" min="-90" max="90" required value="52.1" /></label>
-              <label class="field"><span>Longitude</span><input id="detectionsLng" type="number" step="any" min="-180" max="180" required value="5.3" /></label>
+              <label class="field"><span>Latitude</span><input id="detectionsLat" type="number" step="any" min="-90" max="90" required /></label>
+              <label class="field"><span>Longitude</span><input id="detectionsLng" type="number" step="any" min="-180" max="180" required /></label>
               <label class="field"><span>Radius (km, at most 10)</span><input id="detectionsRadius" type="number" step="any" min="0.1" max="10" required value="10" /></label>
               <label class="field"><span>Deployment ID contains</span><input id="detectionsDeployment" type="text" spellcheck="false" placeholder="Optional" /></label>
               <div class="form-actions">
-                <button class="btn outline" type="button" id="detectionsUseMap">Use map centre</button>
                 <button class="btn primary" type="submit">Load detections</button>
               </div>
             </form>
+            <p class="hint">Click the map to move the search circle. WildlifeNL searches at most 10 km around a point.</p>
             <div class="callout" id="detectionsNote" hidden></div>
             <div class="tiles" id="detectionsTiles"></div>
             <div class="card map-card">
@@ -325,6 +350,60 @@
               <div class="map" id="detectionsMap"></div>
             </div>
             <div class="card" id="detectionsTable"></div>
+          </div>
+        </section>
+
+        <!-- Database -->
+        <section class="view" id="view-database" hidden>
+          <div class="page-header">
+            <div>
+              <h1>Database</h1>
+              <p>Everything WildlifeNL stores and how it hangs together</p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="callout" id="databaseNote" hidden></div>
+            <div class="card stack">
+              <div class="card-bar">
+                <p class="hint">Each box is a kind of record. A line means the two belong together. Click a box to see what is in it.</p>
+                <span class="legend" id="databaseLegend"></span>
+              </div>
+              <div class="graph-scroll"><svg class="graph" id="databaseGraph" role="img" aria-label="The tables of the WildlifeNL database and their links"></svg></div>
+            </div>
+            <div class="card stack" id="databaseDetail" hidden></div>
+          </div>
+        </section>
+
+        <!-- About -->
+        <section class="view" id="view-about" hidden>
+          <div class="page-header">
+            <div>
+              <h1>About</h1>
+              <p>What WildlifeNL Protect is and where to find more</p>
+            </div>
+          </div>
+          <div class="page-body narrow">
+            <div class="card stack">
+              <h2>What this is</h2>
+              <p>WildlifeNL Protect shows the data the WildlifeNL platform holds: the collars and other sensors on animals, their positions and measurements, and the detections of camera traps.</p>
+              <p>Smart Parks made it to see that the data Smart Parks Protect sends to WildlifeNL arrives, and to give partners a quick look at that data. It only reads; it changes nothing in WildlifeNL.</p>
+              <p>The app runs in your browser and talks directly to WildlifeNL. What you see depends on the roles of your WildlifeNL account.</p>
+            </div>
+            <div class="card stack">
+              <h2>Pages</h2>
+              <dl class="facts">
+                <dt><a href="#/map">Live map</a></dt><dd>Where the animals with a sensor are now, with their tracks.</dd>
+                <dt><a href="#/sensors">Sensors</a></dt><dd>Every sensor, and a page per sensor with all its data.</dd>
+                <dt><a href="#/detections">Detections</a></dt><dd>What camera traps and other sensors saw around a point.</dd>
+                <dt><a href="#/explore">Data explorer</a></dt><dd>Measurements over time, as charts and as a table.</dd>
+                <dt><a href="#/database">Database</a></dt><dd>What WildlifeNL stores and how it hangs together.</dd>
+                <dt><a href="#/account">Account</a></dt><dd>Your roles and what they allow.</dd>
+              </dl>
+            </div>
+            <div class="card stack">
+              <h2>Links</h2>
+              <dl class="facts" id="aboutLinks"></dl>
+            </div>
           </div>
         </section>
 
@@ -352,14 +431,17 @@
               <p class="hint">WildlifeNL decides per role what an account may read. Ask the WildlifeNL administrator for a role you miss.</p>
               <div class="table-scroll"><table class="table" id="accessTable"></table></div>
             </div>
-            <div class="card stack">
-              <h2>About</h2>
-              <dl class="facts" id="aboutFacts"></dl>
-            </div>
           </div>
         </section>
       </main>
+      </div>
     </div>
+
+    <dialog class="search" id="searchDialog" aria-label="Search">
+      <input type="search" id="searchInput" placeholder="Search a sensor, an animal or a page…" autocomplete="off" spellcheck="false" />
+      <div class="search-results" id="searchResults" role="listbox"></div>
+      <div class="search-foot"><span><kbd>↑</kbd><kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></div>
+    </dialog>
 
     <div class="toasts" id="toasts" aria-live="polite"></div>
 

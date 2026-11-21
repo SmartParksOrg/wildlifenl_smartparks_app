@@ -2,7 +2,7 @@
 // the panel of the selected sensor. It follows the live map of Smart Parks Protect.
 
 import { SCOPES } from "../api.js";
-import { ago, buildHash, formatDistance, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
+import { ago, buildHash, formatDistance, speciesIcon, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, MAX_RADIUS_M, TRACK_COLORS, loadBasemap, trackColor } from "../map.js";
 import { account, explain, hasScope } from "../session.js";
 import { addSensor, canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorById } from "../store.js";
@@ -46,6 +46,10 @@ function trackPoints(id) {
   return withinWindow(loaded.track, Number.isFinite(hours) ? Date.now() - hours * HOUR : NaN, NaN);
 }
 
+function iconOf(sensor) {
+  return speciesIcon(sensor.animal && sensor.animal.species ? sensor.animal.species.name : "");
+}
+
 function pointLines(point) {
   const reading = point.raw;
   return [
@@ -61,7 +65,7 @@ function pointLines(point) {
 
 function drawMarkers() {
   const shown = sensors.filter((sensor) => sensor.place && !hidden.has(sensor.id));
-  map.setSensors(shown.map((sensor) => ({ id: sensor.id, name: sensor.name, lat: sensor.place.lat, lng: sensor.place.lng })));
+  map.setSensors(shown.map((sensor) => ({ id: sensor.id, name: sensor.name, icon: iconOf(sensor), lat: sensor.place.lat, lng: sensor.place.lng })));
   const placed = sensors.filter((sensor) => sensor.place).length;
   $("mapCount").textContent = shown.length === sensors.length ? plural(sensors.length, "sensor") : `${shown.length} of ${plural(sensors.length, "sensor")}`;
   $("mapCount").title = placed < sensors.length ? `${sensors.length - placed} without a position yet` : "";
@@ -78,9 +82,8 @@ function drawTracks() {
   });
   map.setTracks(drawn);
   const points = drawn.reduce((sum, track) => sum + track.points.length, 0);
-  const select = $("mapTrackHours");
   $("mapTracks").hidden = drawn.length === 0;
-  $("mapTracksText").textContent = `${plural(drawn.length, "track")}, ${plural(points, "point")}, ${select.options[select.selectedIndex].text.toLowerCase()}`;
+  $("mapTracksText").textContent = `${plural(drawn.length, "track")}, ${plural(points, "point")} over`;
 }
 
 function drawLayerList() {
@@ -100,10 +103,13 @@ function drawLayerList() {
           const sub = [sensor.name !== sensor.id ? sensor.id : "", sensor.species, sensor.place ? "" : "no position yet"].filter(Boolean).join(" · ");
           const trackButton = el("button", { class: `btn ghost icon sm${tracked ? " active" : ""}`, type: "button", title: tracked ? "Hide the track" : "Show the track", "aria-label": tracked ? "Hide the track" : "Show the track", onclick: () => toggleTrack(sensor.id) }, icon("route"));
           if (tracked) trackButton.style.color = trackColor(tracks.get(sensor.id));
+          const locate = el("button", { class: "btn ghost icon sm", type: "button", title: "Show on map", "aria-label": "Show on map", disabled: !sensor.place, onclick: () => select(sensor.id, true) }, icon("locate"));
           return el("div", { class: `layer-row${sensor.id === selected ? " selected" : ""}` }, [
             box,
+            el("img", { class: "layer-icon", src: `assets/img/icons/${iconOf(sensor)}.svg`, alt: "" }),
             el("button", { class: "layer-name", type: "button", onclick: () => select(sensor.id, true) }, [el("span", { text: sensor.name }), sub ? el("small", { text: sub }) : null]),
             trackButton,
+            locate,
           ]);
         })
       : [el("div", { class: "picker-empty", text: sensors.length ? "No sensor matches the search." : canListSensors() ? "WildlifeNL has no active sensor deployments. Add a sensor by its ID." : "Add a sensor by its ID to see it on the map." })]),
@@ -136,18 +142,19 @@ function drawObjectPanel() {
     ["Coordinates", sensor.place ? `${sensor.place.lat.toFixed(5)}, ${sensor.place.lng.toFixed(5)}` : ""],
     ["Temperature", temperature == null ? "" : `${temperature} °C`],
     ["Animal", sensor.animal ? [sensor.animal.name, sensor.species && `(${sensor.species})`].filter(Boolean).join(" ") : ""],
-    ["Sensor", el("a", { href: buildHash("sensors", sensor.id), text: "open sensor" })],
-    ["More", el("a", { href: buildHash("explore", "", { sensors: sensor.id, metrics: "temperature" }), text: "data" })],
+    ["Track", all && tracked ? `${inPeriod.length.toLocaleString()} of ${plural(all.track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` : ""],
   ]);
   panel.replaceChildren(
     el("div", { class: "panel-head" }, [
+      el("img", { class: "object-icon", src: `assets/img/icons/${iconOf(sensor)}.svg`, alt: "" }),
       el("div", { class: "object-title" }, [el("strong", { text: sensor.name }), el("small", { text: sensor.species ? `sensor on ${sensor.species.toLowerCase()}` : "sensor" })]),
       el("button", { class: "btn ghost icon sm", type: "button", "aria-label": "Close", onclick: () => select("") }, icon("x")),
     ]),
     list,
     el("div", { class: "row" }, [
-      el("button", { class: "btn primary sm", type: "button", text: tracked ? "Hide the track" : "Show the track", onclick: () => toggleTrack(sensor.id) }),
-      all && tracked ? el("span", { class: "hint", text: `${inPeriod.length.toLocaleString()} of ${plural(all.track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` }) : null,
+      el("button", { class: "btn primary sm", type: "button", onclick: () => toggleTrack(sensor.id) }, [icon("route"), tracked ? "Hide the track" : "Show the track"]),
+      el("a", { class: "btn outline sm", href: buildHash("sensors", sensor.id) }, [icon("sensor"), "Sensor"]),
+      el("a", { class: "btn outline sm", href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }, [icon("chart"), "Data"]),
     ]),
   );
 }
