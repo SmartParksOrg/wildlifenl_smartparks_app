@@ -78,6 +78,16 @@ A sensor deployment in WildlifeNL ties a sensor to an animal, the way Protect ti
 
 On the live map people are a layer with a track per person, in the same track colours as the animals (a track key is a sensor ID, or `p:` and a user ID). Contacts and alarms join the reports in the Events tab; an event ID starts with `r:`, `c:` or `l:`. An alarm is placed at what caused it, else in the middle of its zone (`alarmPlace`).
 
+## Location sharing
+
+`sharing.js` sends the position of the device with `POST /tracking-reading/`, the call the phone apps make. The person switches it on at the Account page; the choice is kept under `wnl-share-location` as the server and the user ID, so it only counts for that account. A timer looks every minute whether sharing is on, the page is on screen and the last position is 10 minutes old (`EVERY_MS`), and then asks the browser for a position. A browser gives none to a page in the background, so there is no way to share with the app closed. A refused position switches sharing off with the reason.
+
+The API answers with what is near that position: the animals, detections and reports within about 250 metres and 48 hours, and a conveyance when a running experiment has a message for the place. The detections and reports go to `detections.js` (`addFinds`), the position to the own track in `people.js` (`addOwnReading`), and the message is shown as a notice. The animals come without their sensor, so they cannot become animals of `store.js`; the live map shows them as events with an ID that starts with `n:`.
+
+Facts from the API's source: it refuses a timestamp that is not in its past, so the app sends the moment of a second ago; it keeps every position and overwrites the last known location of the user; and it does not look whether a message was sent before, so a person who stays near an animal can get the same message every 10 minutes.
+
+The app has no Bluetooth. The phone apps start a contact (`POST /contact/`) when they hear a collar. A web page cannot scan for devices without a browser flag, a collar only advertises the last three bytes of its address where the API wants six, and connecting to a collar to ask for it is ruled out on purpose.
+
 ## Other records
 
 `records.js` describes every kind of record that has no page of its own (`TYPES`): where its list and a single record are read, which roles that needs, the columns of its list and the lists that hang under one record. `pages/records.js` draws a list page and a record page for all of them from the data itself.
@@ -192,6 +202,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
 | `wnl-map-layers` | `localStorage` | The layers panel: the open tab and per tab the hidden rows, the rows switched on that are off by default, folded groups, arrangement and sorting |
 | `wnl-report-places:{server}` | `localStorage` | The places where reports were found |
+| `wnl-share-location` | `localStorage` | The server and user ID of the account that switched on location sharing on this device |
 | `wnl-server` | `localStorage` | The platform of the last sign-in, chosen again next time |
 | `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |

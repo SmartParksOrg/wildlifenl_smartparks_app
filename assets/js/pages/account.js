@@ -4,7 +4,8 @@ import { SCOPES } from "../api.js";
 import { operationLabel } from "../lib.js";
 import { loadApi, writeOperations } from "../rights.js";
 import { account, explain, hasScope, refreshProfile, signOut } from "../session.js";
-import { $, busy, el, facts, note, toast } from "../ui.js";
+import { onSharing, setSharing, sharing } from "../sharing.js";
+import { $, busy, el, facts, formatMoment, note, plural, toast } from "../ui.js";
 import { drawActions, inApp } from "../writes.js";
 
 let wired = false;
@@ -40,8 +41,14 @@ async function drawRights() {
   );
 }
 
+function drawSharing() {
+  $("sharingSwitch").checked = sharing.on;
+  $("sharingStatus").textContent = !sharing.on ? sharing.message : sharing.last ? `Last sent ${formatMoment(sharing.last)}. Near you: ${plural(sharing.animals.length, "animal")}.` : sharing.message || "Looking for your position…";
+}
+
 function draw() {
   const { session } = account;
+  drawSharing();
   facts($("accountFacts"), [
     ["Name", session.name || "Not set"],
     ["Email address", session.email || "Unknown"],
@@ -80,6 +87,8 @@ function draw() {
 
 function wire() {
   wired = true;
+  $("sharingSwitch").addEventListener("change", (event) => setSharing(event.target.checked));
+  onSharing(() => account.session && drawSharing());
   $("signOutButton2").addEventListener("click", () => signOut());
   $("copyToken").addEventListener("click", async () => {
     try {

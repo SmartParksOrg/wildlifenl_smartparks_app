@@ -118,9 +118,10 @@ const LABELS = { nextQuestionID: "Next question", definition: "Area" };
 /** The order of a form: what is typed or picked first, then the places, then the details. */
 const RANK = { point: 1, outline: 1, group: 2, list: 2 };
 
-/** Whether an action of this app makes the call, for the table on the Account page. */
+/** Whether this app makes the call, for the table on the Account page: through an action, or
+ * as the position that sharing.js sends. */
 export function inApp(method, path) {
-  return Object.values(ACTIONS).some((actions) => actions.some((action) => action.call[0] === method && action.call[1] === path));
+  return (method === "POST" && path === "/tracking-reading/") || Object.values(ACTIONS).some((actions) => actions.some((action) => action.call[0] === method && action.call[1] === path));
 }
 
 function allowed(action) {

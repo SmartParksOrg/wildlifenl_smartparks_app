@@ -18,6 +18,7 @@ import { closeForm, wireForm } from "./form.js";
 import { resetPeople } from "./people.js";
 import { TYPES, canList, listTitle, recordHash, resetRecords } from "./records.js";
 import { resetRights } from "./rights.js";
+import { onSharing, resetSharing, sharing, startSharing } from "./sharing.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
 
@@ -243,6 +244,7 @@ function showApp() {
   $("auth").hidden = true;
   $("app").hidden = false;
   drawAccount();
+  startSharing();
   route();
 }
 
@@ -381,11 +383,13 @@ async function start() {
     drawThemeButton();
   });
   $("signOutButton").addEventListener("click", () => signOut());
+  onSharing(() => ($("sharingChip").hidden = !sharing.on));
   window.addEventListener("hashchange", route);
   account.onSignOut = (message) => {
     if ($("searchDialog").open) $("searchDialog").close();
     closeForm();
     resetRights();
+    resetSharing();
     resetStore();
     resetDetections();
     resetPeople();

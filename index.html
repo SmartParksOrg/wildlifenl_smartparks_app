@@ -203,6 +203,7 @@
             <svg class="icon"><use href="#i-search" /></svg><span>Search…</span><kbd>Ctrl K</kbd>
           </button>
           <span class="grow"></span>
+          <a class="chip" id="sharingChip" href="#/account" title="This app sends your position to WildlifeNL while it is open. Click to change that." hidden>Sharing location</a>
           <span class="chip" id="serverChip"></span>
           <button class="btn ghost icon" type="button" id="themeButton" aria-label="Theme"><svg class="icon"><use href="#i-monitor" /></svg></button>
         </header>
@@ -568,6 +569,15 @@
                 <button class="btn destructive" type="button" id="signOutButton2">Sign out</button>
               </div>
               <p class="hint">Signing out removes the token from this browser. WildlifeNL tokens do not expire, so the same token works again after the next sign-in.</p>
+            </div>
+            <div class="card stack">
+              <h2>Share my location</h2>
+              <p class="hint">Off unless you switch it on. While it is on and this app is open on your screen, it sends your position to WildlifeNL at once and then every 10 minutes, as the WildlifeNL phone apps do. WildlifeNL keeps every position. Researchers can see where you were, and a running experiment can send you a message when you are near an animal. In return the live map shows the animals, detections and reports near you.</p>
+              <label class="check">
+                <input id="sharingSwitch" type="checkbox" />
+                <span>Share my location from this device</span>
+              </label>
+              <p class="hint" id="sharingStatus"></p>
             </div>
             <div class="card stack">
               <h2>What your account may read</h2>

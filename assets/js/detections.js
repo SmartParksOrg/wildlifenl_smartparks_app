@@ -182,6 +182,14 @@ export async function loadOwnReports(force = false) {
   changed();
 }
 
+/** Adds detections and reports that came from elsewhere than a search: what WildlifeNL says is
+ * near a position the account shared. */
+export function addFinds({ found, reports }) {
+  for (const item of found) detections.found.set(item.ID, item);
+  for (const item of reports) detections.reports.set(item.ID, item);
+  if (found.length || reports.length) changed();
+}
+
 /** Loads the period at the known places, once; `force` loads it again. */
 export function loadDetections(force = false) {
   if (detections.loaded && !force) return;

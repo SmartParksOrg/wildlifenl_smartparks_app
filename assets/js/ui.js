@@ -29,10 +29,10 @@ export function icon(name) {
   return svg;
 }
 
-export function toast(message, isError = false) {
+export function toast(message, isError = false, ms = isError ? 6000 : 2500) {
   const node = el("div", { class: `toast${isError ? " error" : ""}`, text: message });
   $("toasts").append(node);
-  setTimeout(() => node.remove(), isError ? 6000 : 2500);
+  setTimeout(() => node.remove(), ms);
 }
 
 /** Shows a callout, or hides it when there is no text. */

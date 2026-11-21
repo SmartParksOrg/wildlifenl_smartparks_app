@@ -19,6 +19,8 @@ This repository is a static web app. The maintainers fix problems in this code. 
 - The WildlifeNL token is stored in the browser only: in `localStorage` when you choose to stay signed in, otherwise in `sessionStorage`. It is sent to the WildlifeNL API address you signed in to and nowhere else.
 - WildlifeNL tokens do not expire. Signing out removes the token from the browser; it does not revoke it. Use "Keep me signed in" only on a device you trust. If a token leaks, ask the WildlifeNL administrator to revoke it.
 - The app changes something in WildlifeNL only when you press a button and send a form, and only what the roles of your account allow. WildlifeNL checks every change again on its side.
+- Your position leaves the browser only when you switch on "Share my location" on the Account page. It then goes to WildlifeNL, which keeps it, and nowhere else. The choice is stored per account and server, so another person who signs in on the same device does not share theirs.
+- The app does not use Bluetooth and never connects to a collar or another device.
 - A content security policy allows scripts only from this site and one pinned, integrity-checked library. There are no analytics and no third-party scripts.
 
 ## Secrets

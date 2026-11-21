@@ -1209,6 +1209,11 @@ a.btn {
   display: none;
 }
 
+a.chip {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* MapLibre's own buttons bottom right, in the same square style */
 .live-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
   border-radius: calc(var(--radius) - 2px);

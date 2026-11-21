@@ -11,6 +11,7 @@ import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
 import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, personName } from "../people.js";
 import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
+import { onSharing, sharing } from "../sharing.js";
 import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 import { choices, drawTab, isCustomised, isShown, offerTabs, openTab, resetChoices, show as showRow } from "./map-layers.js";
@@ -31,7 +32,8 @@ let areas = [];
 const tracks = new Map();
 /** what is selected: `{kind, id}` with the kind of a tab of the layers panel. An animal is
  * known here by the ID of its sensor, where its data comes from; a person by the user ID; an
- * event by a letter and its ID: `r:` a report, `c:` a contact, `l:` an alarm. */
+ * event by a letter and its ID: `r:` a report, `c:` a contact, `l:` an alarm, `n:` an animal
+ * near the position the account shared. */
 let selected = { kind: "", id: "" };
 /** the area whose visits are drawn, and those visits */
 let visits = { area: "", cells: [] };
@@ -112,12 +114,32 @@ function reportTime(report) {
 }
 
 function detectorList() {
-  return hasScope(SCOPES.detections) ? detectorsOf() : [];
+  return detectorsOf();
 }
 
-/** Everything that happened at a place and is no detection: reports, contacts and alarms. */
+function pointOf(place) {
+  return place && Number.isFinite(place.latitude) && Number.isFinite(place.longitude) ? { lat: place.latitude, lng: place.longitude } : null;
+}
+
+/** Everything that happened at a place and is no detection: reports, contacts, alarms, and
+ * the animals WildlifeNL found near the position the account last shared. */
 function eventList() {
   const events = [];
+  for (const animal of sharing.animals) {
+    const place = pointOf(animal.location);
+    if (!place) continue;
+    const species = animal.species ? animal.species.commonName || animal.species.name : "";
+    events.push({
+      id: `n:${animal.ID}`,
+      name: animal.name || species || "Animal",
+      sub: [species, formatMoment(toTime(animal.locationTimestamp))].filter(Boolean).join(" · "),
+      group: "Animals near you",
+      time: toTime(animal.locationTimestamp),
+      icon: reportIcon(animal),
+      label: "Animal near you",
+      place,
+    });
+  }
   for (const report of detections.reports.values()) {
     const place = reportPlace(report);
     if (!place) continue;
@@ -413,6 +435,21 @@ function personPanel(id) {
   ];
 }
 
+/** An animal WildlifeNL found near the position the account shared. It comes without its
+ * sensor, so it only has a page when the app knows the animal from elsewhere. */
+function nearPanel(animal, place) {
+  const known = sensorByAnimal(animal.ID);
+  return [
+    panelHead(reportIcon(animal), animal.name || "Animal", "animal near you"),
+    factList([
+      ["Species", animal.species ? animal.species.commonName || animal.species.name : ""],
+      ["Last position", formatMoment(toTime(animal.locationTimestamp))],
+      ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
+    ]),
+    el("div", { class: "row" }, [iconButton("locate", "Centre the map here", () => map.flyTo(place)), known ? iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }) : null]),
+  ];
+}
+
 function contactPanel(contact, place) {
   const deployment = contact.borneSensorDeployment || {};
   const animal = deployment.animal;
@@ -530,6 +567,7 @@ function drawObjectPanel() {
     if (place && id.startsWith("r:")) content = reportPanel(detections.reports.get(key), place);
     if (place && id.startsWith("c:")) content = contactPanel(people.contacts.find((c) => String(c.ID) === key), place);
     if (place && id.startsWith("l:")) content = alarmPanel(people.alarms.find((a) => String(a.ID) === key), place);
+    if (place && id.startsWith("n:")) content = nearPanel(sharing.animals.find((a) => String(a.ID) === key), place);
   } else if (kind === "areas") {
     const area = areas.find((a) => a.id === id);
     if (area) content = areaPanel(area);
@@ -794,6 +832,12 @@ function wire() {
     drawFinds();
     drawPanel();
     if (["detectors", "events"].includes(selected.kind)) drawObjectPanel();
+  });
+  onSharing(() => {
+    if ($("view-map").hidden) return;
+    drawFinds();
+    drawPanel();
+    if (selected.kind === "events") drawObjectPanel();
   });
   onPeople(() => {
     if ($("view-map").hidden) return;

@@ -114,6 +114,18 @@ export function loadPeople(force = false) {
   return loading;
 }
 
+/** Adds a position the account just shared to its own track, when the tracks are loaded;
+ * else the next load reads it from WildlifeNL. */
+export function addOwnReading(reading) {
+  const place = reading.location;
+  const t = toTime(reading.timestamp);
+  const id = account.session.userID;
+  if (!people.loaded || !place || !Number.isFinite(place.latitude) || !Number.isFinite(place.longitude) || !Number.isFinite(t)) return;
+  if (!people.tracks.has(id)) people.tracks.set(id, []);
+  people.tracks.get(id).push({ t, lat: place.latitude, lng: place.longitude, raw: { userID: id, timestamp: reading.timestamp, location: place } });
+  changed();
+}
+
 export function personName(id) {
   return people.names.get(id) || `Person ${String(id).slice(0, 8)}`;
 }

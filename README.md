@@ -79,7 +79,15 @@ The app reads from WildlifeNL itself which changes it accepts and which roles ea
 
 A form asks for exactly what WildlifeNL takes, checks it before it is sent, and shows the answer of WildlifeNL when it refuses. A place is typed or clicked on a map, an area is drawn on it. Deleting and deactivating ask first.
 
-The app does not send readings, detections, tracking readings or contacts; those come from collars, camera traps and the phone apps. It also cannot delete your account.
+The app does not send readings, detections or contacts; those come from collars, camera traps and the phone apps. It also cannot delete your account.
+
+A contact is a phone that was near the collar of an animal, which the phone apps notice over Bluetooth. A web page cannot scan for Bluetooth devices nearby, and this app never connects to a collar, so contacts are only shown here.
+
+### Share my location
+
+On the Account page you can switch on "Share my location". It is off until you do, and the choice holds for your account on that device only. While it is on and the app is open on your screen, the app sends your position to WildlifeNL at once and then every 10 minutes, as the WildlifeNL phone apps do. A browser gives no position to a page in the background, so sharing pauses when the phone locks or you look at another tab. A chip in the top bar shows that sharing is on.
+
+WildlifeNL keeps every position. Researchers can see where you were, and a running experiment can send you a message when you are near an animal. In return the live map shows what WildlifeNL finds near you: animals and reports under Events, camera traps under Detectors, and your own track under People.
 
 ### Questions about a report
 

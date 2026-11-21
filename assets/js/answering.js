@@ -68,7 +68,7 @@ export async function answerReport(report) {
     // an answer can trigger a message of the experiment
     for (const response of done.result) {
       const message = response && response.conveyance && response.conveyance.message;
-      if (message && message.text) toast(message.name ? `${message.name}: ${message.text}` : message.text);
+      if (message && message.text) toast(message.name ? `${message.name}: ${message.text}` : message.text, false, 12000);
     }
   }
   return true;
