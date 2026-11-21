@@ -22,6 +22,7 @@ assets/js/lib.js         Pure functions: times, tracks, metrics, buckets, CSV. N
 assets/js/api.js         WildlifeNlClient
 assets/js/session.js     The signed-in account: token storage, roles, sign out
 assets/js/store.js       The sensors and their readings, fetched once and kept in memory
+assets/js/detections.js  The detections: searching an area, remembered detector places
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
@@ -110,6 +111,8 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-basemap` | `localStorage` | The chosen base map |
 | `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
 | `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
+| `wnl-map-detectors` | `localStorage` | Whether the detectors layer is shown |
+| `wnl-server` | `localStorage` | The platform of the last sign-in, chosen again next time |
 | `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
 
@@ -127,13 +130,22 @@ A track draws every fix in its line but at most 2000 dots, and the popup of a po
 
 ## Detections
 
-`GET /detections/` needs a centre and a radius of at most 10 km, and the API has no list of detectors. `pages/detections.js` therefore searches an area circle by circle:
+`GET /detections/` needs a centre and a radius of at most 10 km, and the API has no list of detectors. `detections.js` is the one module that deals with that; the live map and the Detections page both read from it and hear about changes through `onDetections`.
 
-- `circleGrid` in `lib.js` gives the centres of a honeycomb of 10 km circles that covers the map view. More than 300 circles are refused with a hint to zoom in.
+- `searchBox` covers a box with a honeycomb of 10 km circles (`circleGrid` in `lib.js`) and asks them one by one. More than 300 circles are refused with a hint to zoom in.
 - `searchCircle` spaces the requests 700 ms apart, about 85 a minute, under the API's default of 120 requests a minute per token (`RATE_LIMIT_MAX_REQUESTS` in the API's source). A `429` answer is waited out for 20 seconds and tried again.
-- Every place with a detection is kept in `localStorage` under `wnl-detection-places:{server}`, rounded to about 100 metres. `coverPlaces` turns those places into the fewest circles, and that is all the page asks when it opens or the period changes.
+- Every place with a detection is kept in `localStorage` under `wnl-detection-places:{server}`, rounded to about 100 metres. `coverPlaces` turns those places into the fewest circles, and that is all `loadDetections` asks.
+- `detectorsOf` groups detections into detectors, one per `deploymentID` and place. The live map draws them with `LiveMap.setDetectors`, as a diamond with a camera, Protect's shape for events.
 
-The filters (species, detector) work on what is loaded; `countPerDay` makes the series of the chart.
+The design documents of the API (`docs/FunctionalDesign.md` in its repository) describe what detections are for: people view them on a map, and a detection of less than an hour old raises an alarm for every zone that contains it and lists its species.
+
+A detection's `uri` comes from another system, so the app only makes it a link when `webLink` in `lib.js` accepts it as an `http` or `https` address.
+
+### What Protect sends
+
+The WildlifeNL connector of Protect (`shared/shared/integrations/connectors/wildlifenl.py`) posts one detection per species of a `SPECIES_DETECTION` event, which is how AddaxAI Connect pictures arrive: `deploymentID` is the camera's sensor ID, `sensorType` is `visual`, `start` and `end` are the capture time, `uri` is the link back, and `animals` holds one entry with the best confidence as a percentage and the event title as `description`.
+
+Note for the Protect side: the test server (API `20261116`) wants the species as `speciesName`, the exact Latin name, where the live server (API `20260826`) still wants `speciesID`. The connector sends `speciesID`, so the test server refuses its detections until the connector follows.
 
 MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
 

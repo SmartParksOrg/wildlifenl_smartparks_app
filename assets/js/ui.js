@@ -99,8 +99,8 @@ function sortValue(value) {
 }
 
 /** A sortable, filterable table of flat rows with CSV and JSON export. Renders 200 rows at a
- * time so a sensor with years of readings stays fast. `link` turns the cells of one column
- * into links, `onRow` makes a whole row clickable. */
+ * time so a sensor with years of readings stays fast. `link` (one, or a list) turns the cells
+ * of a column into links: `{column, href(row), text, title, external}`. */
 export class DataTable {
   constructor(container, { filename, empty = "Nothing loaded yet.", tools = true }) {
     this.filename = filename;
@@ -108,7 +108,8 @@ export class DataTable {
     this.raw = [];
     this.columns = [];
     this.labels = {};
-    this.link = null;
+    this.format = {};
+    this.links = [];
     this.sortKey = null;
     this.sortDir = -1;
     this.shown = PAGE_SIZE;
@@ -134,12 +135,14 @@ export class DataTable {
   }
 
   /** @param rows flat objects; `raw` is what Copy JSON gives (the server's own records) */
-  setRows(rows, { columns, labels = {}, sortKey, sortDir = -1, raw, link = null, empty } = {}) {
+  /** `format` gives the text shown for a column, while sorting and CSV keep the value itself */
+  setRows(rows, { columns, labels = {}, format = {}, sortKey, sortDir = -1, raw, link = null, empty } = {}) {
     this.rows = rows;
     this.raw = raw || rows;
     this.columns = columns || columnsOf(rows);
     this.labels = labels;
-    this.link = link;
+    this.format = format;
+    this.links = [].concat(link || []);
     this.sortKey = sortKey || this.columns[0] || null;
     this.sortDir = sortDir;
     if (empty) this.emptyNode.textContent = empty;
@@ -194,9 +197,10 @@ export class DataTable {
           "tr",
           {},
           this.columns.map((key) => {
-            const text = cellText(row[key]);
-            const href = this.link && this.link.column === key && text ? this.link.href(row) : null;
-            if (href) return el("td", {}, el("a", { href, text }));
+            const text = this.format[key] && row[key] != null && row[key] !== "" ? this.format[key](row[key], row) : cellText(row[key]);
+            const link = text && this.links.find((l) => l.column === key);
+            const href = link ? link.href(row) : null;
+            if (href) return el("td", {}, el("a", { href, text: link.text || text, title: link.title || null, target: link.external ? "_blank" : null, rel: link.external ? "noopener noreferrer" : null }));
             return el("td", { text, title: text.length > 30 ? text : null });
           }),
         ),

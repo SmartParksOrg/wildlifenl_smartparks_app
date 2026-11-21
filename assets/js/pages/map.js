@@ -1,17 +1,18 @@
 // The live map, laid out like the live map of Smart Parks Protect: a marker per sensor, the
 // Layers button top left, the tools as square buttons top right (base map, 3D terrain,
-// measure, tracks) and the panels in a column beside them.
+// measure, tracks) and the panels in a column beside them. Detectors are a layer of their own.
 
 import { SCOPES } from "../api.js";
-import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
-import { BASEMAPS, LiveMap, MAX_RADIUS_M, TRACK_COLORS, loadBasemap, trackColor } from "../map.js";
-import { account, explain, hasScope } from "../session.js";
+import { counted, detections, detectorsOf, loadDetections, onDetections, searchBox, speciesName, stopSearch } from "../detections.js";
+import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toTime, trackLength, webLink, withinWindow } from "../lib.js";
+import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
+import { explain, hasScope } from "../session.js";
 import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 
 const HIDDEN_KEY = "wnl-map-hidden";
+const DETECTORS_KEY = "wnl-map-detectors";
 const HOUR = 3600 * 1000;
-const DETECTION_DAYS = 7;
 
 /** @type {LiveMap|null} */
 let map = null;
@@ -20,6 +21,8 @@ let hidden = new Set(readHidden());
 /** sensor id to its slot in TRACK_COLORS; a track keeps its colour while it is shown */
 const tracks = new Map();
 let selected = "";
+/** the selected detector, as the id `detectorsOf` gives it */
+let selectedDetector = "";
 let fitted = false;
 let measure = [];
 
@@ -127,8 +130,57 @@ function drawLayerList() {
   );
 }
 
+function detectorsShown() {
+  return $("mapDetections").checked && hasScope(SCOPES.detections);
+}
+
+/** The detectors layer and its lines in the layers panel. */
+function drawDetectors() {
+  const detectors = detectorsOf();
+  map.setDetectors(detectorsShown() ? detectors.map((d) => ({ id: d.id, name: d.name, lat: d.lat, lng: d.lng })) : []);
+  $("mapDetectionsLabel").textContent = detectors.length ? `Detectors (${detectors.length})` : "Detectors";
+  $("mapDetectionsText").textContent = detections.progress || (detections.found.size ? `${plural(detections.found.size, "detection")}, ${detections.from} to ${detections.to}` : detections.message);
+  $("mapDetectionsStop").hidden = !detections.busy;
+  $("mapDetectionsSearch").disabled = detections.busy;
+  if (selectedDetector) drawObjectPanel();
+}
+
+function drawDetectorPanel(detector) {
+  const panel = $("objectPanel");
+  const species = counted(detector.detections, speciesName);
+  const newest = detector.detections.reduce((best, d) => (!best || toTime(d.start) > toTime(best.start) ? d : best), null);
+  const picture = newest ? webLink(newest.uri) : "";
+  const list = el("dl", { class: "facts" });
+  facts(list, [
+    ["Detections", `${detector.detections.length.toLocaleString()}, ${detections.from} to ${detections.to}`],
+    ["Latest", `${formatMoment(detector.latest)} (${ago(detector.latest)})`],
+    ["Species", species.slice(0, 5).map(([name, count]) => `${name} ${count}`).join(", ") + (species.length > 5 ? ` and ${species.length - 5} more` : "")],
+    ["Sensor type", [...new Set(detector.detections.map((d) => d.sensorType).filter(Boolean))].join(", ")],
+    ["Sent by", [...new Set(detector.detections.map((d) => d.user && d.user.name).filter(Boolean))].join(", ")],
+    ["Coordinates", `${detector.lat.toFixed(5)}, ${detector.lng.toFixed(5)}`],
+  ]);
+  panel.replaceChildren(
+    el("div", { class: "panel-head" }, [
+      el("img", { class: "object-icon", src: "assets/img/icons/camera_trap.svg", alt: "" }),
+      el("div", { class: "object-title" }, [el("strong", { text: detector.name }), el("small", { text: "detector" })]),
+      el("button", { class: "btn ghost icon sm", type: "button", "aria-label": "Close", title: "Close", onclick: () => selectDetector("") }, icon("x")),
+    ]),
+    list,
+    el("div", { class: "row" }, [
+      iconButton("list", "Open its detections", null, { href: buildHash("detections", "", { detector: detector.name }) }),
+      iconButton("locate", "Centre the map here", () => map.flyTo(detector)),
+      picture ? el("a", { class: "btn outline icon", href: picture, target: "_blank", rel: "noopener noreferrer", title: "Open the newest picture", "aria-label": "Open the newest picture" }, icon("external")) : null,
+    ]),
+  );
+}
+
 function drawObjectPanel() {
   const panel = $("objectPanel");
+  const detector = selectedDetector && detectorsOf().find((d) => d.id === selectedDetector);
+  if (detector) {
+    panel.hidden = false;
+    return drawDetectorPanel(detector);
+  }
   const sensor = sensorById(selected);
   panel.hidden = !sensor;
   if (!sensor) return;
@@ -172,6 +224,7 @@ function redraw() {
   drawMarkers();
   drawTracks();
   drawLayerList();
+  drawDetectors();
   drawObjectPanel();
 }
 
@@ -246,8 +299,19 @@ async function ensureReadings(id) {
   }
 }
 
+function selectDetector(id, fly = false) {
+  selectedDetector = id;
+  selected = "";
+  map.setSelected(id);
+  drawLayerList();
+  drawObjectPanel();
+  const detector = id && detectorsOf().find((d) => d.id === id);
+  if (fly && detector) map.flyTo(detector);
+}
+
 async function select(id, fly = false) {
   selected = id;
+  selectedDetector = "";
   map.setSelected(id);
   drawLayerList();
   drawObjectPanel();
@@ -298,32 +362,6 @@ async function locateTheRest() {
     }
   };
   await Promise.all([worker(), worker(), worker()]);
-}
-
-async function loadDetections() {
-  if (!$("mapDetections").checked) return map.setDetections([]);
-  try {
-    const center = map.center();
-    const radius = Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius()));
-    const detections = await account.api.detections({
-      start: new Date(Date.now() - DETECTION_DAYS * 24 * HOUR).toISOString(),
-      end: new Date().toISOString(),
-      latitude: center.lat,
-      longitude: center.lng,
-      radius,
-    });
-    map.setDetections(
-      detections
-        .map((d) => ({ point: toPoint(d, "start"), d }))
-        .filter((x) => x.point)
-        .map(({ point, d }) => ({ lat: point.lat, lng: point.lng, title: (d.species && (d.species.commonName || d.species.name)) || "Detection", lines: [formatMoment(point.t), d.deploymentID, d.sensorType] })),
-    );
-    toast(`${plural(detections.length, "detection")} within ${Math.round(radius / 1000)} km of the map centre in the last ${DETECTION_DAYS} days`);
-  } catch (error) {
-    $("mapDetections").checked = false;
-    const text = explain(error);
-    if (text) toast(text, true);
-  }
 }
 
 async function reload(force = false) {
@@ -383,9 +421,9 @@ function wire() {
     saveHidden();
     tracks.clear();
     $("mapTrackHours").value = "168";
-    $("mapDetections").checked = false;
+    $("mapDetections").checked = true;
+    localStorage.removeItem(DETECTORS_KEY);
     $("layerSearch").value = "";
-    map.setDetections([]);
     redraw();
   });
   $("mapTrackHours").addEventListener("change", redraw);
@@ -393,7 +431,22 @@ function wire() {
     tracks.clear();
     redraw();
   });
-  $("mapDetections").addEventListener("change", loadDetections);
+  $("mapDetections").checked = localStorage.getItem(DETECTORS_KEY) !== "off";
+  $("mapDetections").addEventListener("change", () => {
+    localStorage.setItem(DETECTORS_KEY, $("mapDetections").checked ? "on" : "off");
+    if (detectorsShown()) loadDetections();
+    else if (selectedDetector) selectDetector("");
+    drawDetectors();
+  });
+  $("mapDetectionsSearch").addEventListener("click", () => {
+    $("mapDetections").checked = true;
+    const problem = searchBox(map.bounds());
+    if (problem) toast(problem, true);
+  });
+  $("mapDetectionsStop").addEventListener("click", stopSearch);
+  onDetections(() => {
+    if (!$("view-map").hidden) drawDetectors();
+  });
   document.addEventListener("themechange", drawLayerList); // the track buttons follow the theme
 }
 
@@ -402,7 +455,8 @@ export async function show({ query }) {
   if (!map) {
     map = new LiveMap($("liveMap"), {
       onSensor: (id) => select(id),
-      onNothing: () => select(""),
+      onDetector: (id) => selectDetector(id),
+      onNothing: () => (selectedDetector ? selectDetector("") : select("")),
       describePoint: (track, point) => [track.name, pointLines(point)],
       onMeasure: (place) => {
         measure = [...measure, place];
@@ -417,7 +471,15 @@ export async function show({ query }) {
     await select(query.sensor, true);
     if (query.track) await toggleTrack(query.sensor, true);
   }
-  if (query.sensor) history.replaceState(null, "", buildHash("map"));
+  if (detectorsShown()) loadDetections();
+  if (query.layers) showCard("layerPanel", true);
+  if (query.detector) {
+    // a link from the detections list: wait for the detectors, then go to the one named
+    for (let tries = 0; tries < 100 && detections.busy; tries++) await new Promise((resolve) => setTimeout(resolve, 200));
+    const detector = detectorsOf().find((d) => d.name === query.detector);
+    if (detector) selectDetector(detector.id, true);
+  }
+  if (query.sensor || query.detector || query.layers) history.replaceState(null, "", buildHash("map"));
 }
 
 /** Forgets what belongs to the account that signed out. */
@@ -425,13 +487,13 @@ export function reset() {
   sensors = [];
   tracks.clear();
   selected = "";
+  selectedDetector = "";
   fitted = false;
   if (!map || !map.map) return;
   setMeasuring(false);
   map.setSelected("");
   map.setSensors([]);
   map.setTracks([]);
-  map.setDetections([]);
+  map.setDetectors([]);
   for (const id of ["objectPanel", "layerPanel", "tracksCard"]) $(id).hidden = true;
-  $("mapDetections").checked = false;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, circleGrid, countPerDay, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, webLink, circleGrid, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -212,9 +212,11 @@ test("coverPlaces needs one search for places close together", () => {
   assert.deepEqual(coverPlaces([], 9000), []);
 });
 
-test("countPerDay counts per local day and fills the empty days", () => {
-  const day = (d, h) => new Date(2026, 10, d, h).getTime();
-  const series = countPerDay([day(1, 9), day(1, 23), day(3, 1), NaN]);
-  assert.deepEqual(series, [[day(1, 0), 2], [day(2, 0), 0], [day(3, 0), 1]]);
-  assert.deepEqual(countPerDay([]), []);
+test("webLink lets only http and https addresses through", () => {
+  assert.equal(webLink(" https://connect.example.org/cameras/12 "), "https://connect.example.org/cameras/12");
+  assert.equal(webLink("http://example.org"), "http://example.org");
+  assert.equal(webLink("javascript:alert(1)"), "");
+  assert.equal(webLink("data:text/html,x"), "");
+  assert.equal(webLink("https://a b"), "");
+  assert.equal(webLink(null), "");
 });

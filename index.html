@@ -41,6 +41,7 @@
         <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.500a5.500 5.500 0 0 1 0 11H11" /></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></symbol>
         <symbol id="i-check-small" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.800 9.800 0 0 1 6.700 2.700L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.800 9.800 0 0 1-6.700-2.700L3 16M8 16H3v5" /></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5" /></symbol>
         <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></symbol>
@@ -61,6 +62,15 @@
         <img class="logo logo-dark" src="assets/img/logo-landscape-white.webp" alt="Smart Parks" width="224" />
         <h1 class="card-title">WildlifeNL Protect</h1>
         <p class="card-description" id="authDescription">Sign in with your WildlifeNL account. You get a code by email, no password needed.</p>
+
+        <label class="field">
+          <span>Platform</span>
+          <select id="authServer"></select>
+        </label>
+        <label class="field" id="authBaseUrlField" hidden>
+          <span>WildlifeNL API address</span>
+          <input id="authBaseUrl" type="url" inputmode="url" spellcheck="false" placeholder="https://" />
+        </label>
 
         <form id="emailForm" class="stack" novalidate>
           <label class="field">
@@ -99,17 +109,6 @@
 
         <div class="auth-footer">
           <button class="btn link" type="button" id="authModeToggle">I already have a token</button>
-          <details>
-            <summary>Server</summary>
-            <label class="field">
-              <span>WildlifeNL API address</span>
-              <input id="authBaseUrl" type="url" inputmode="url" spellcheck="false" list="authServers" />
-              <datalist id="authServers">
-                <option value="https://live-api-wildlifenl.uu.nl" label="Live"></option>
-                <option value="https://test-api-wildlifenl.uu.nl" label="Test"></option>
-              </datalist>
-            </label>
-          </details>
         </div>
       </div>
     </main>
@@ -192,9 +191,14 @@
                 <div class="panel-title"><span>Sensors</span><span class="panel-actions"><button class="btn link" type="button" id="layerShowAll">Show all</button><button class="btn link" type="button" id="layerHideAll">Hide all</button></span></div>
                 <input type="search" id="layerSearch" placeholder="Search…" aria-label="Search sensors" />
                 <div class="layer-list" id="layerList"></div>
-                <div id="layerDetections">
-                  <div class="panel-title"><span>Detections</span></div>
-                  <label class="check"><input type="checkbox" id="mapDetections" /><span>Last 7 days, within 10 km of the map centre</span></label>
+                <div class="stack-tight" id="layerDetections">
+                  <div class="panel-title"><span>Detections</span><span class="panel-actions"><a class="btn link" href="#/detections">Open the list</a></span></div>
+                  <label class="check"><input type="checkbox" id="mapDetections" checked /><span id="mapDetectionsLabel">Detectors</span></label>
+                  <span class="hint" id="mapDetectionsText"></span>
+                  <div class="row">
+                    <button class="btn outline sm" type="button" id="mapDetectionsSearch"><svg class="icon"><use href="#i-search" /></svg>Search this view</button>
+                    <button class="btn outline sm" type="button" id="mapDetectionsStop" hidden>Stop</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -345,17 +349,18 @@
           </div>
         </section>
 
-        <!-- Detections -->
+        <!-- Detections: a list, like the events of Protect; the detectors are on the live map -->
         <section class="view" id="view-detections" hidden>
           <div class="page-header">
             <div>
               <h1>Detections</h1>
-              <p>What camera traps and other detectors saw, per place, species and day</p>
+              <p>What camera traps and other detectors saw. The detectors are a layer of the live map.</p>
             </div>
             <div class="page-actions">
               <span class="hint" id="detectionsProgress"></span>
               <button class="btn outline" type="button" id="detectionsStop" hidden>Stop</button>
-              <button class="btn primary" type="button" id="detectionsScan"><svg class="icon"><use href="#i-search" /></svg>Search this map view</button>
+              <a class="btn outline" href="#/map?layers=detections"><svg class="icon"><use href="#i-map" /></svg>Find detectors on the map</a>
+              <button class="btn outline icon" type="button" id="detectionsRefresh" aria-label="Refresh" title="Refresh"><svg class="icon"><use href="#i-refresh" /></svg></button>
             </div>
           </div>
           <div class="filter-row">
@@ -366,15 +371,6 @@
           </div>
           <div class="page-body">
             <div class="callout" id="detectionsNote" hidden></div>
-            <div class="tiles" id="detectionsTiles"></div>
-            <div class="card map-card">
-              <div class="card-bar"><strong>Detectors</strong><span class="hint">Click the map to search 10 km around a point.</span></div>
-              <div class="map" id="detectionsMap"></div>
-            </div>
-            <div class="card-grid">
-              <div class="card stack" id="detectionsChartCard" hidden><h2>Detections per day</h2><div class="chart small" id="detectionsChart"></div></div>
-              <div class="card stack" id="detectionsSpeciesCard" hidden><h2>Species</h2><div class="bars" id="detectionsBars"></div></div>
-            </div>
             <div class="card" id="detectionsTable"></div>
           </div>
         </section>

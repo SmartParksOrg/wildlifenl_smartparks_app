@@ -93,13 +93,6 @@ export function ago(t, now = Date.now()) {
   return label;
 }
 
-/** The value of a `datetime-local` input for a moment, in the browser's time zone. */
-export function toLocalInput(t) {
-  const d = new Date(t);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 /** The human message of a failed request: the problem document's detail when there is one. */
 export function problemText(status, body) {
   if (body && typeof body === "object") {
@@ -186,6 +179,12 @@ export function autoBucket(spanMs) {
   if (days > 8) return "1h";
   if (days > 2) return "15m";
   return "raw";
+}
+
+/** The address when it is a plain web link, else an empty text. Data from a server is only
+ * made clickable through this, so a `javascript:` address can never become a link. */
+export function webLink(value) {
+  return /^https?:\/\/[^\s]+$/i.test(String(value || "").trim()) ? String(value).trim() : "";
 }
 
 /** The page and its parameters from a location hash like `#/sensors/A1?range=168`. */
@@ -439,25 +438,4 @@ export function coverPlaces(places, radius) {
   const centres = [];
   for (const place of places) if (!centres.some((centre) => distanceMeters(centre, place) <= radius)) centres.push({ lat: place.lat, lng: place.lng });
   return centres;
-}
-
-/** `[start of the day, count]` pairs for a list of moments, in the browser's time zone, with
- * the empty days between the first and the last filled in. */
-export function countPerDay(times) {
-  const counts = new Map();
-  for (const t of times) {
-    if (!Number.isFinite(t)) continue;
-    const day = new Date(t);
-    day.setHours(0, 0, 0, 0);
-    counts.set(day.getTime(), (counts.get(day.getTime()) || 0) + 1);
-  }
-  if (!counts.size) return [];
-  const days = [...counts.keys()].sort((a, b) => a - b);
-  const series = [];
-  const day = new Date(days[0]);
-  while (day.getTime() <= days[days.length - 1]) {
-    series.push([day.getTime(), counts.get(day.getTime()) || 0]);
-    day.setDate(day.getDate() + 1);
-  }
-  return series;
 }

@@ -1,0 +1,209 @@
+// The detections the app has found, shared by the live map (the detectors layer) and the
+// Detections page (the list).
+//
+// WildlifeNL only answers within 10 km of a point and has no list of detectors, so an area is
+// searched circle by circle. Every place with a detection is remembered in this browser, per
+// server, and from then on only those places are asked.
+
+import { circleGrid, coverPlaces, toPoint, toTime } from "./lib.js";
+import { account, explain } from "./session.js";
+
+/** WildlifeNL answers a detection query within at most this many metres of a point. */
+export const MAX_RADIUS_M = 10000;
+/** At most this many circles in one search: about four minutes at the pace below. */
+const MAX_CIRCLES = 300;
+/** WildlifeNL allows 120 requests a minute per account; this leaves room for the other pages. */
+const PACE_MS = 700;
+const DAY = 24 * 3600 * 1000;
+const DEFAULT_DAYS = 90;
+
+function dateText(t) {
+  return new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+/** `found` holds every detection of the period by ID; `progress` is a line for the person
+ * while a search runs; `message` says how the last search ended when it found nothing. */
+export const detections = {
+  found: new Map(),
+  from: dateText(Date.now() - DEFAULT_DAYS * DAY),
+  to: dateText(Date.now()),
+  busy: false,
+  progress: "",
+  message: "",
+  loaded: false,
+};
+
+const listeners = new Set();
+let run = 0;
+let lastStart = 0;
+
+/** Calls `listener` whenever the detections or the progress change. */
+export function onDetections(listener) {
+  listeners.add(listener);
+}
+
+function changed() {
+  for (const listener of listeners) listener();
+}
+
+function placesKey() {
+  return `wnl-detection-places:${new URL(account.session.baseUrl).host}`;
+}
+
+/** The places where a detector was found before. */
+export function knownPlaces() {
+  try {
+    const places = JSON.parse(localStorage.getItem(placesKey()) || "[]");
+    return Array.isArray(places) ? places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(list) {
+  const places = knownPlaces();
+  const seen = new Set(places.map((p) => `${p.lat},${p.lng}`));
+  for (const detection of list) {
+    const point = toPoint(detection, "start");
+    if (!point) continue;
+    const place = { lat: Math.round(point.lat * 1000) / 1000, lng: Math.round(point.lng * 1000) / 1000 };
+    if (!seen.has(`${place.lat},${place.lng}`)) {
+      seen.add(`${place.lat},${place.lng}`);
+      places.push(place);
+    }
+  }
+  localStorage.setItem(placesKey(), JSON.stringify(places));
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One circle, paced so a long search stays under the limit of the API; a "slow down"
+ * answer is waited out and tried again. */
+async function searchCircle(centre, mine) {
+  const start = new Date(toTime(`${detections.from}T00:00`)).toISOString();
+  const end = new Date(toTime(`${detections.to}T23:59:59`)).toISOString();
+  for (let attempt = 0; attempt < 4 && mine === run; attempt++) {
+    const pause = lastStart + PACE_MS - Date.now();
+    lastStart = Math.max(Date.now(), lastStart + PACE_MS);
+    if (pause > 0) await wait(pause);
+    if (mine !== run) return [];
+    try {
+      return await account.api.detections({ start, end, latitude: centre.lat, longitude: centre.lng, radius: MAX_RADIUS_M });
+    } catch (error) {
+      if (error.status !== 429) throw error;
+      detections.progress = "WildlifeNL asks to slow down, waiting 20 seconds…";
+      changed();
+      await wait(20000);
+    }
+  }
+  return [];
+}
+
+async function search(centres, label) {
+  const mine = ++run;
+  detections.busy = true;
+  detections.message = "";
+  let done = 0;
+  try {
+    for (const centre of centres) {
+      if (mine !== run) return;
+      detections.progress = centres.length > 1 ? `${label} ${done + 1} of ${centres.length}` : "Searching…";
+      changed();
+      const list = await searchCircle(centre, mine);
+      if (mine !== run) return;
+      for (const detection of list) detections.found.set(detection.ID, detection);
+      if (list.length) remember(list);
+      done++;
+    }
+  } catch (error) {
+    const text = explain(error);
+    if (mine === run && text) detections.message = text;
+  }
+  if (mine !== run) return;
+  detections.busy = false;
+  detections.progress = "";
+  if (!detections.found.size && !detections.message) {
+    detections.message = knownPlaces().length ? "No detections in this period at the known detectors. Choose a longer period, or search another part of the map." : "No detections found there. Search another part of the map; the app remembers where it finds detectors.";
+  }
+  changed();
+}
+
+/** Loads the period at the known detectors, once; `force` loads it again. */
+export function loadDetections(force = false) {
+  if (detections.loaded && !force) return;
+  detections.loaded = true;
+  detections.found.clear();
+  const centres = coverPlaces(knownPlaces(), MAX_RADIUS_M * 0.9);
+  if (centres.length) return search(centres, "Loading detector area");
+  run++;
+  detections.busy = false;
+  detections.progress = "";
+  detections.message = "No detectors known yet. WildlifeNL only answers within 10 km of a point: open the live map, go to an area and search it for detections under Layers.";
+  changed();
+}
+
+/** Changes the period, as two `yyyy-mm-dd` dates, and loads it. */
+export function setPeriod(from, to) {
+  if (!(toTime(`${from}T00:00`) <= toTime(`${to}T23:59:59`))) {
+    detections.message = "The period must end after it starts.";
+    return changed();
+  }
+  detections.from = from;
+  detections.to = to;
+  loadDetections(true);
+}
+
+/** Searches the box `{south, west, north, east}` circle by circle. Returns a text when the
+ * box is too large to search. */
+export function searchBox(box) {
+  const centres = circleGrid(box, MAX_RADIUS_M);
+  if (centres.length > MAX_CIRCLES) return `This view needs ${centres.length} searches of 10 km each. Zoom in until it needs at most ${MAX_CIRCLES}, which takes about four minutes.`;
+  detections.loaded = true;
+  search(centres, "Searching area");
+  return "";
+}
+
+export function stopSearch() {
+  run++;
+  detections.busy = false;
+  detections.progress = "";
+  changed();
+}
+
+export function speciesName(detection) {
+  return (detection.species && (detection.species.commonName || detection.species.name)) || "Unknown";
+}
+
+/** `[key, count]` pairs of a list, most first. */
+export function counted(items, keyOf) {
+  const counts = new Map();
+  for (const item of items) counts.set(keyOf(item), (counts.get(keyOf(item)) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/** The detectors of a list of detections: one per deployment and place, with what it saw. */
+export function detectorsOf(list = [...detections.found.values()]) {
+  const sites = new Map();
+  for (const detection of list) {
+    const point = toPoint(detection, "start");
+    if (!point) continue;
+    const id = `${detection.deploymentID}|${point.lat.toFixed(4)}|${point.lng.toFixed(4)}`;
+    const site = sites.get(id) || { id, name: detection.deploymentID, lat: point.lat, lng: point.lng, latest: 0, detections: [] };
+    site.latest = Math.max(site.latest, point.t);
+    site.detections.push(detection);
+    sites.set(id, site);
+  }
+  return [...sites.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+/** Forgets the detections of the account that signed out; the remembered places stay. */
+export function resetDetections() {
+  run++;
+  detections.found.clear();
+  detections.from = dateText(Date.now() - DEFAULT_DAYS * DAY);
+  detections.to = dateText(Date.now());
+  detections.busy = false;
+  detections.progress = "";
+  detections.message = "";
+  detections.loaded = false;
+}

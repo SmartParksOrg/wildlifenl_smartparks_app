@@ -1,6 +1,6 @@
-// Maps on MapLibre GL JS. MapView is the small map of a page (points, a track, a search
-// circle); LiveMap is the live map with a marker per sensor, coloured tracks, detections and
-// the measuring line.
+// Maps on MapLibre GL JS. MapView is the small map of a page (points and a track); LiveMap
+// is the live map with a marker per sensor, coloured tracks, the detectors and the measuring
+// line.
 
 const FONT = ["Noto Sans Regular"]; // the glyphs OpenFreeMap serves
 const GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
@@ -47,13 +47,10 @@ const TERRAIN_KEY = "wnl-terrain";
 const BASEMAP_KEY = "wnl-basemap";
 const NETHERLANDS = { center: [5.3, 52.1], zoom: 6.5 };
 const GREEN = "#52735E";
-const CORAL = "#D9825F";
 const MAX_TRACK_DOTS = 2000;
 /** Protect's value: markers group when they would overlap, not before. */
 const CLUSTER_RADIUS_PX = 28;
-const CLICKABLE = ["sensors", "sensor-clusters", "track-points", "detections"];
-/** WildlifeNL answers a detection query within at most this many metres of a point. */
-export const MAX_RADIUS_M = 10000;
+const CLICKABLE = ["sensors", "sensor-clusters", "detectors", "track-points"];
 
 /** One colour per track, in the order Protect uses, and a lighter set of the same hues for a
  * dark ground. A track is known by its slot, so it keeps its hue when the ground changes. */
@@ -117,21 +114,11 @@ function collection(features) {
   return { type: "FeatureCollection", features };
 }
 
-/** A circle of `radius` metres around a point as a polygon, for the search area. */
-function circleFeature(center, radius) {
-  const ring = [];
-  const latStep = radius / 111320;
-  const lngStep = radius / (111320 * Math.cos((center.lat * Math.PI) / 180));
-  for (let i = 0; i <= 64; i++) {
-    const angle = (i / 64) * 2 * Math.PI;
-    ring.push([center.lng + lngStep * Math.cos(angle), center.lat + latStep * Math.sin(angle)]);
-  }
-  return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } };
-}
-
 // Marker images, drawn the way Smart Parks Protect draws them: a white disc with a ring in
 // the state colour and the icon of the species inside. A sensor without an animal is a
-// rounded square, Protect's shape for devices.
+// rounded square, Protect's shape for devices, and a detector is a diamond, its shape for
+// events.
+const DETECTOR_ICON = "camera_trap";
 const MARKER_COLOURS = { normal: GREEN, selected: "#2563EB" };
 const SELECTED_HALO = "rgba(37, 99, 235, 0.28)";
 const iconTexts = new Map();
@@ -175,7 +162,13 @@ async function markerImage(id) {
   ctx.lineWidth = state === "selected" ? 7 : 5;
   ctx.beginPath();
   if (name === "sensor") ctx.roundRect(4, 4, size - 8, size - 8, 10);
-  else ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+  else if (name === DETECTOR_ICON) {
+    ctx.moveTo(size / 2, 3);
+    ctx.lineTo(size - 3, size / 2);
+    ctx.lineTo(size / 2, size - 3);
+    ctx.lineTo(3, size / 2);
+    ctx.closePath();
+  } else ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   const text = await iconText(name);
@@ -184,7 +177,8 @@ async function markerImage(id) {
       const picture = new Image(size, size);
       picture.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text.replace(/currentColor/g, colour))}`;
       await picture.decode();
-      ctx.drawImage(picture, 14, 14, size - 28, size - 28);
+      const inset = name === DETECTOR_ICON ? 18 : 14;
+      ctx.drawImage(picture, inset, inset, size - inset * 2, size - inset * 2);
     } catch {
       /* the ring alone still marks the place */
     }
@@ -296,6 +290,13 @@ class BaseMap {
     this.map.fitBounds(bounds, { padding: 64, maxZoom, duration: animate ? 600 : 0 });
   }
 
+  /** The box the map shows, `{south, west, north, east}`. */
+  bounds() {
+    if (!this.map) return null;
+    const box = this.map.getBounds();
+    return { south: box.getSouth(), west: box.getWest(), north: box.getNorth(), east: box.getEast() };
+  }
+
   center() {
     return this.map ? this.map.getCenter() : null;
   }
@@ -318,14 +319,11 @@ export class MapView extends BaseMap {
     this.ordered = [];
     this.describe = () => ["", []];
     this.showTrack = false;
-    this.circle = null;
-    this.onGround = null;
     if (!this.map) return;
-    this.map.on("click", (event) => {
-      const feature = this.map.getLayer("points") && this.map.queryRenderedFeatures(event.point, { layers: ["points"] })[0];
+    this.map.on("click", "points", (event) => {
+      const feature = event.features && event.features[0];
       const point = feature && this.ordered[feature.properties.index];
       if (point) this.popup(feature.geometry.coordinates, popupHtml(...this.describe(point)));
-      else if (this.onGround) this.onGround(event.lngLat);
     });
     this.pointer("points");
   }
@@ -345,26 +343,11 @@ export class MapView extends BaseMap {
     this.draw();
   }
 
-  /** Draws a search circle of `radius` metres and reports clicks beside the points. */
-  setCircle(center, radius, onGround) {
-    this.circle = center ? { center, radius } : null;
-    this.onGround = onGround;
-    this.draw();
-  }
-
-  /** The box the map shows, `{south, west, north, east}`. */
-  bounds() {
-    if (!this.map) return null;
-    const box = this.map.getBounds();
-    return { south: box.getSouth(), west: box.getWest(), north: box.getNorth(), east: box.getEast() };
-  }
-
   sources() {
     const ordered = [...this.points].sort((a, b) => (a.t || 0) - (b.t || 0));
     this.ordered = ordered;
     const last = ordered.length - 1;
     return {
-      circle: collection(this.circle ? [circleFeature(this.circle.center, this.circle.radius)] : []),
       points: collection(ordered.map((p, index) => pointFeature(p.lng, p.lat, { latest: index === last ? 1 : 0, index }))),
       track: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.showTrack && ordered.length > 1 ? ordered.map((p) => [p.lng, p.lat]) : [] } },
     };
@@ -373,8 +356,6 @@ export class MapView extends BaseMap {
   layers(night) {
     const colour = night ? "#90ae9b" : GREEN;
     return [
-      { id: "circle-fill", type: "fill", source: "circle", paint: { "fill-color": colour, "fill-opacity": 0.08 } },
-      { id: "circle-line", type: "line", source: "circle", paint: { "line-color": colour, "line-width": 1.5, "line-dasharray": [3, 2] } },
       { id: "track", type: "line", source: "track", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": colour, "line-width": 2, "line-opacity": 0.85 } },
       {
         id: "points",
@@ -396,7 +377,7 @@ export class MapView extends BaseMap {
  * detections. The page hears about clicks through `onSensor`, `onTrackPoint` and `onNothing`. */
 export class LiveMap extends BaseMap {
   /** `describePoint(track, point)` gives `[title, lines]` for the popup of a track point. */
-  constructor(container, { onSensor, onNothing, describePoint, onMeasure }) {
+  constructor(container, { onSensor, onDetector, onNothing, describePoint, onMeasure }) {
     super(container, "bottom-right");
     this.terrain = loadTerrain();
     if (this.map && this.terrain) this.map.setPitch(TERRAIN_PITCH);
@@ -404,7 +385,7 @@ export class LiveMap extends BaseMap {
     this.measure = [];
     this.sensors = [];
     this.tracks = [];
-    this.detections = [];
+    this.detectors = [];
     this.selected = "";
     this.making = new Set();
     if (!this.map) return;
@@ -419,7 +400,7 @@ export class LiveMap extends BaseMap {
         const zoom = await this.map.getSource("sensors").getClusterExpansionZoom(hit.properties.cluster_id);
         return this.map.easeTo({ center: hit.geometry.coordinates, zoom: zoom + 0.5, duration: 500 });
       }
-      if (hit.layer.id === "detections") return this.popup(hit.geometry.coordinates, hit.properties.html);
+      if (hit.layer.id === "detectors") return onDetector(hit.properties.id);
       const track = this.tracks[hit.properties.track];
       if (track) this.popup(hit.geometry.coordinates, popupHtml(...describePoint(track, track.points[hit.properties.point])));
     });
@@ -434,7 +415,7 @@ export class LiveMap extends BaseMap {
   /** Draws, after making the marker images the sensors need; a style change drops them. */
   draw() {
     if (!this.map || !this.ready) return;
-    const needed = [...new Set(this.sensors.map((s) => markerId(s.icon, s.id === this.selected ? "selected" : "normal")))];
+    const needed = [...new Set([...this.sensors.map((s) => markerId(s.icon, s.id === this.selected ? "selected" : "normal")), ...this.detectors.map((d) => markerId(DETECTOR_ICON, d.id === this.selected ? "selected" : "normal"))])];
     const missing = needed.filter((id) => !this.map.hasImage(id) && !this.making.has(id));
     for (const id of missing) {
       this.making.add(id);
@@ -465,9 +446,9 @@ export class LiveMap extends BaseMap {
     this.draw();
   }
 
-  /** @param {{lat:number,lng:number,title:string,lines:string[]}[]} detections */
-  setDetections(detections) {
-    this.detections = detections;
+  /** @param {{id:string,name:string,lat:number,lng:number}[]} detectors */
+  setDetectors(detectors) {
+    this.detectors = detectors;
     this.draw();
   }
 
@@ -487,12 +468,6 @@ export class LiveMap extends BaseMap {
     if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600 });
   }
 
-  /** Half the diagonal of the view in metres, for a query "around what I see". */
-  viewRadius() {
-    const bounds = this.map.getBounds();
-    return Math.round(bounds.getNorthEast().distanceTo(bounds.getSouthWest()) / 2);
-  }
-
   sources() {
     const colours = nightMap(this.basemap) ? TRACK_COLORS_NIGHT : TRACK_COLORS;
     return {
@@ -508,7 +483,12 @@ export class LiveMap extends BaseMap {
           return dots;
         }),
       ),
-      detections: collection(this.detections.map((d) => pointFeature(d.lng, d.lat, { html: popupHtml(d.title, d.lines) }))),
+      detectors: collection(
+        this.detectors
+          .map((d) => ({ d, marker: markerId(DETECTOR_ICON, d.id === this.selected ? "selected" : "normal") }))
+          .filter(({ marker }) => this.map.hasImage(marker))
+          .map(({ d, marker }) => pointFeature(d.lng, d.lat, { id: d.id, name: d.name, selected: d.id === this.selected ? 1 : 0, marker })),
+      ),
       "measure-line": collection(this.measure.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.measure.map((p) => [p.lng, p.lat]) } }] : []),
       "measure-points": collection(this.measure.map((p) => pointFeature(p.lng, p.lat, {}))),
       // a sensor joins the map once its marker image is made, a moment after the first draw
@@ -528,7 +508,24 @@ export class LiveMap extends BaseMap {
       { id: "track-points", type: "circle", source: "track-points", paint: { "circle-radius": 3.5, "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": 2 } },
       { id: "measure-line", type: "line", source: "measure-line", paint: { "line-color": night ? "#ffffff" : "#1f2a24", "line-width": 2, "line-dasharray": [2, 2] } },
       { id: "measure-points", type: "circle", source: "measure-points", paint: { "circle-radius": 4, "circle-color": "#ffffff", "circle-stroke-color": night ? "#ffffff" : "#1f2a24", "circle-stroke-width": 2 } },
-      { id: "detections", type: "circle", source: "detections", paint: { "circle-radius": 6, "circle-color": CORAL, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } },
+      {
+        id: "detectors",
+        type: "symbol",
+        source: "detectors",
+        layout: {
+          "icon-image": ["get", "marker"],
+          "icon-size": ["case", selected, 1.25, 0.9],
+          "icon-allow-overlap": true,
+          "text-field": ["get", "name"],
+          "text-font": FONT,
+          "text-size": 11,
+          "text-offset": [0, 1.8],
+          "text-anchor": "top",
+          "text-optional": true,
+          "text-max-width": 12,
+        },
+        paint: { "text-color": night ? "#e6ece8" : "#1f2a24", "text-halo-color": night ? "#121917" : "#ffffff", "text-halo-width": 1.2 },
+      },
       {
         id: "sensor-clusters",
         type: "circle",

@@ -8,13 +8,16 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Detectors are a layer of the live map: a diamond per camera trap or other detector, with a panel for what it saw. "Search this view" looks for detectors area by area, and the places found are remembered for the next visit.
+- The detections list shows the description, who sent a detection and a link to its picture, which is what detections from AddaxAI Connect through Protect carry.
 - Base maps Satellite, Aerial photo of the Netherlands and Topographic, and 3D terrain. None needs a key.
 - A measuring tool on the live map.
-- Detections can be explored: search the map view area by area, with the places of the detectors remembered for the next visit; filters for species and detector, detections per day and counts per species.
+- The sign-in card has a Platform list: Live, Test or another address. The last choice is remembered.
 
 ### Changed
 
 - The live map places its controls as Protect does: Layers top left, the base map, terrain, measure and tracks as square buttons top right, zoom and locate bottom right, and the panels in a column beside the tools.
+- The Detections page is a list like the events of Protect, with filters for period, species and detector. It has no map of its own.
 - The sensor panel on the map has icon buttons only.
 - The track length moved to a Tracks card behind the tracks button.
 

@@ -16,7 +16,7 @@ The pages follow the structure of Smart Parks Protect: a live map, a list with a
 | Sensors | Every sensor with its animal, last reading, last position and number of readings | The same |
 | Sensor page | Everything WildlifeNL holds for one sensor: facts, latest values, the track, charts and every reading | The same |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per sensor | The same |
-| Detections | What camera traps and other detectors saw, per place, species and day, found by searching the map area by area | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
+| Detections | What camera traps and other detectors saw, as a list; the detectors are a layer of the live map | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Database | What WildlifeNL stores and how it hangs together, as a drawing with a plain explanation per kind of record | Any account |
 | Account | Your profile, your roles and what they allow | Any account |
 | About | What the app is, with links | Any account |
@@ -33,7 +33,7 @@ WildlifeNL lets only `herd-manager` accounts list the deployed sensors. Those ac
 
 The map is laid out like the live map of Protect.
 
-- **Layers** (top left) opens the list of sensors: tick one to show or hide it, search by name or ID, draw its track with the route button and go to it with the target button. Detections of the last 7 days around the map centre can be switched on there too.
+- **Layers** (top left) opens the list of sensors: tick one to show or hide it, search by name or ID, draw its track with the route button and go to it with the target button. The detectors are a layer there too, see Detections below.
 - **Tools** (top right, square buttons): the base map, 3D terrain, measuring a distance, and the tracks with their length (24 hours to everything) once a track is on. Up to eight tracks at a time, each in its own colour.
 - **Base maps:** Light, Streets, Bright and Night from OpenFreeMap, Satellite (Esri World Imagery), Aerial photo of the Netherlands (PDOK) and Topographic (OpenTopoMap). The default follows the theme. None needs a key.
 - **Zoom, north and your own position** are bottom right.
@@ -43,13 +43,32 @@ The map is laid out like the live map of Protect.
 
 ### Detections
 
-WildlifeNL answers a detection query only within 10 km of a point, and has no list of detectors. The page works around that:
+A detection is a record that a camera trap or another detector saw animals of one species. In WildlifeNL's own design detections are something to see on a map, and a fresh one raises an alarm for people who drew a zone around that place. The app follows that, in the way Protect shows events: a layer on the live map and a list.
 
-- **Search this map view** asks circle by circle until the view is covered, at a pace that stays under the API's limit of 120 requests a minute. A view of 200 by 90 km takes about a minute. Stop ends it.
-- **Click the map** to search 10 km around one point.
-- **Places with detections are remembered** in the browser, per server. From then on the page opens with the detections of those places, which takes a request per detector area.
-- **Filters:** the period, the species and the detector. A click on a species bar shows only that species.
-- **Shown:** a point per detector on the map, detections per day, the species with their counts, and every detection in the table.
+- **On the live map** every detector is a diamond with a camera. Click one for what it saw: the number of detections, the latest, the species and who sent them, with buttons to its detections and to the newest picture.
+- **The Detections page** is the list: time, species, number of animals, confidence, description, detector, who sent it and a link to the picture. Filter by period, species and detector. A click on a detector goes to it on the map.
+
+WildlifeNL answers a detection query only within 10 km of a point and has no list of detectors, so the app has to look for them:
+
+- **Search this view** (under Layers on the live map) asks circle by circle until the view is covered, at a pace that stays under the API's limit of 120 requests a minute. Most of the Netherlands takes about three and a half minutes. Stop ends it.
+- **Places with detections are remembered** in the browser, per server. From then on the map and the list open with the detections of those places, which takes a request per detector area.
+- **The period** is set on the Detections page (the last 90 days at first) and also holds for the map. A search only finds detectors with a detection in that period, so choose a long period before the first search.
+
+#### Detections from AddaxAI Connect
+
+Camera trap pictures classified by [AddaxAI Connect](https://github.com/PetervanLunteren/AddaxAI-Connect) reach WildlifeNL through Smart Parks Protect: Protect turns a classified picture into a species detection event, and its WildlifeNL integration posts that as a detection. Here is how such a detection shows up:
+
+| In this app | Comes from |
+| --- | --- |
+| Detector | The camera's identity in Protect (`sensor_id_source` of the integration) |
+| Time | The moment the picture was taken |
+| Detection | The species, which WildlifeNL looks up by the name Protect sends |
+| Confidence | The best classification confidence, as a percentage |
+| Description | The title of the Protect event, such as "Wolf at Waterhole north" |
+| Sent by | The WildlifeNL account of the Protect integration |
+| Picture | The link back to AddaxAI Connect |
+
+A picture with two species becomes two detections at the same moment. A camera without a location in Protect sends nothing.
 
 ### Data explorer
 
@@ -64,7 +83,7 @@ That is all: there is no password. With "Keep me signed in on this device" the t
 
 If you already have a bearer token, choose "I already have a token" and paste it.
 
-The app signs in to the live server. Under "Server" on the sign-in card you can choose the test server (`https://test-api-wildlifenl.uu.nl`) instead. A token belongs to one server.
+Choose the platform on the sign-in card: Live, Test, or another address. The app remembers the last one. A token belongs to one platform.
 
 Good to know:
 

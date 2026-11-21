@@ -3,6 +3,11 @@
 import { leadingObjects, problemText } from "./lib.js";
 
 export const DEFAULT_API_URL = "https://live-api-wildlifenl.uu.nl";
+/** The platforms offered at sign-in. A token belongs to one of them. */
+export const SERVERS = [
+  { label: "Live", url: DEFAULT_API_URL },
+  { label: "Test", url: "https://test-api-wildlifenl.uu.nl" },
+];
 /** The name WildlifeNL shows in the login email. A token belongs to an email address and an
  * app name together, so this app gets its own token and never replaces the one Protect uses. */
 export const APP_NAME = "WildlifeNL Protect";

@@ -1,7 +1,7 @@
 // The frame of the app: sign-in, the navigation and which page is shown. Each page lives in
 // pages/ and exports `show(route)` and `reset()`.
 
-import { APP_NAME, ApiError, DEFAULT_API_URL, WildlifeNlClient } from "./api.js";
+import { APP_NAME, ApiError, SERVERS, WildlifeNlClient } from "./api.js";
 import { buildHash, parseHash } from "./lib.js";
 import * as aboutPage from "./pages/about.js";
 import * as accountPage from "./pages/account.js";
@@ -12,6 +12,7 @@ import * as mapPage from "./pages/map.js";
 import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
 import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
+import { resetDetections } from "./detections.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
 
@@ -32,8 +33,39 @@ const PAGES = {
 
 const auth = { mode: "email", email: "" };
 
+const SERVER_KEY = "wnl-server";
+const OTHER = "other";
+
+/** The address of the platform chosen on the sign-in card. */
+function chosenServer() {
+  const value = $("authServer").value;
+  return value === OTHER ? $("authBaseUrl").value : value;
+}
+
 function authClient() {
-  return new WildlifeNlClient($("authBaseUrl").value || DEFAULT_API_URL);
+  const client = new WildlifeNlClient(chosenServer());
+  try {
+    localStorage.setItem(SERVER_KEY, client.baseUrl); // the next sign-in starts at the same platform
+  } catch {
+    /* the choice lasts for this page only */
+  }
+  return client;
+}
+
+/** Fills the platform list: Live, Test and an address of one's own; the last one used is chosen. */
+function drawServers() {
+  const select = $("authServer");
+  let last = "";
+  try {
+    last = localStorage.getItem(SERVER_KEY) || "";
+  } catch {
+    /* Live by default */
+  }
+  select.replaceChildren(...SERVERS.map((server) => el("option", { value: server.url, text: server.label })), el("option", { value: OTHER, text: "Other address…" }));
+  const known = SERVERS.some((server) => server.url === last);
+  select.value = known || !last ? last || SERVERS[0].url : OTHER;
+  if (!known && last) $("authBaseUrl").value = last;
+  $("authBaseUrlField").hidden = select.value !== OTHER;
 }
 
 function setAuthMode(mode) {
@@ -42,6 +74,7 @@ function setAuthMode(mode) {
   $("codeForm").hidden = mode !== "code";
   $("tokenForm").hidden = mode !== "token";
   $("authModeToggle").textContent = mode === "token" ? "Sign in with an email code" : "I already have a token";
+  $("authServer").disabled = mode === "code"; // the code belongs to the platform it was asked from
   $("authDescription").textContent =
     mode === "code"
       ? `We sent a code to ${auth.email}. It can take a minute to arrive.`
@@ -57,7 +90,7 @@ function showAuth(message = "") {
   $("app").hidden = true;
   $("auth").hidden = false;
   $("authPhoto").style.backgroundImage = `url("assets/img/auth-background-${1 + Math.floor(Math.random() * 2)}.webp")`;
-  $("authBaseUrl").value = $("authBaseUrl").value || DEFAULT_API_URL;
+  drawServers();
   $("authCode").value = "";
   $("authToken").value = "";
   setAuthMode("email");
@@ -79,6 +112,11 @@ async function startSession(client, credential, remember) {
 
 function wireAuth() {
   const fail = (error) => note($("authError"), error.message || String(error), "error");
+
+  $("authServer").addEventListener("change", () => {
+    $("authBaseUrlField").hidden = $("authServer").value !== OTHER;
+    if ($("authServer").value === OTHER) $("authBaseUrl").focus();
+  });
 
   const sendCode = (button) =>
     busy(button, async () => {
@@ -317,6 +355,7 @@ async function start() {
   account.onSignOut = (message) => {
     if ($("searchDialog").open) $("searchDialog").close();
     resetStore();
+    resetDetections();
     for (const page of Object.values(PAGES)) page.module.reset();
     showAuth(message);
   };
