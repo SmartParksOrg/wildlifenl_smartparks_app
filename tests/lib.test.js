@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, answeredOf, openQuestion, questionOrder, responseBodies, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -364,3 +364,66 @@ test("localInput gives the moment in the time of the device", () => {
   assert.equal(new Date(text).toISOString(), "2026-11-21T10:00:00.000Z");
   assert.equal(localInput(""), "");
 });
+
+// ---------------------------------------------------------------------------------------------
+// Answering a questionnaire
+
+const QUESTIONS = [
+  { ID: "q3", index: 3, text: "Third", answers: [] },
+  { ID: "q1", index: 1, text: "First", answers: [{ ID: "a2", index: 2, text: "No", nextQuestionID: "q3" }, { ID: "a1", index: 1, text: "Yes" }, { ID: "a3", index: 3, text: "Back", nextQuestionID: "q1" }] },
+  { ID: "q2", index: 2, text: "Second", answers: [{ ID: "b1", index: 1, text: "One" }] },
+  { ID: "q4", index: 4, text: "Fourth", answers: [] },
+];
+
+test("questionOrder sorts by index and leaves the list as it was", () => {
+  assert.deepEqual(questionOrder(QUESTIONS).map((q) => q.ID), ["q1", "q2", "q3", "q4"]);
+  assert.equal(QUESTIONS[0].ID, "q3");
+  assert.deepEqual(questionOrder(null), []);
+});
+
+test("openQuestion walks the questions in order", () => {
+  assert.equal(openQuestion(QUESTIONS, {}).ID, "q1");
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a1"] }).ID, "q2");
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a1"], q2: ["b1"] }).ID, "q3");
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a1"], q2: ["b1"], q3: [], q4: [] }), null);
+  assert.equal(openQuestion([], {}), null);
+});
+
+test("openQuestion follows a jump to a later question and no jump back", () => {
+  // "No" skips the second question
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a2"] }).ID, "q3");
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a2"], q3: [] }).ID, "q4");
+  // "Back" points at the question itself, which would never end
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a3"] }).ID, "q2");
+  // of several picked options the first in order with a jump decides
+  assert.equal(openQuestion(QUESTIONS, { q1: ["a3", "a2", "a1"] }).ID, "q3");
+});
+
+test("answeredOf reads what was answered for one report", () => {
+  const responses = [
+    { interactionID: "r1", questionID: "q1", answerID: "a1" },
+    { interaction: { ID: "r1" }, question: { ID: "q1" }, answer: { ID: "a2" } },
+    { interactionID: "r1", questionID: "q3", text: "open" },
+    { interactionID: "r2", questionID: "q2", answerID: "b1" },
+  ];
+  assert.deepEqual(answeredOf(responses, "r1"), { q1: ["a1", "a2"], q3: [] });
+  assert.deepEqual(answeredOf(null, "r1"), {});
+});
+
+test("responseBodies sends one response per picked answer, the text with the first", () => {
+  const question = { ID: "q1" };
+  assert.deepEqual(responseBodies(question, "r1", ["a1"], ""), [{ interactionID: "r1", questionID: "q1", answerID: "a1" }]);
+  assert.deepEqual(responseBodies(question, "r1", ["a1", "a2"], " because "), [
+    { interactionID: "r1", questionID: "q1", answerID: "a1", text: "because" },
+    { interactionID: "r1", questionID: "q1", answerID: "a2" },
+  ]);
+  assert.deepEqual(responseBodies(question, "r1", [], "open"), [{ interactionID: "r1", questionID: "q1", text: "open" }]);
+  assert.throws(() => responseBodies(question, "r1", [], "  "), /Give an answer/);
+});
+
+test("formBody takes several ticked choices", () => {
+  const fields = [{ name: "picked", label: "Which?", kind: "ticks", required: true }];
+  assert.deepEqual(formBody(fields, { picked: ["a", "b"] }), { picked: ["a", "b"] });
+  assert.throws(() => formBody(fields, { picked: [] }), /Which\? is needed/);
+});
+

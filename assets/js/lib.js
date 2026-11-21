@@ -527,6 +527,8 @@ function schemaFields(schemas, schemaName) {
  * `max`, `minLength`, `pattern` or `fields`. The kinds: `text`, `longtext`, `email`, `url`,
  * `integer`, `number`, `yesno`, `choice`, `moment`, `date`, `point`, `outline` (a list of
  * points), `group` (details with fields of their own) and `list` (several such details).
+ * A form can also hold a field of the kind `ticks`, several of a list of choices, which no
+ * schema of the API asks for but a question of a questionnaire does.
  */
 export function formFields(openapi, schemaName) {
   return schemaFields((openapi.components && openapi.components.schemas) || {}, schemaName);
@@ -561,6 +563,7 @@ function empty(value) {
 
 function valueOf(field, value) {
   if (field.kind === "yesno") return Boolean(value);
+  if (field.kind === "ticks") return Array.isArray(value) && value.length ? value : undefined;
   if (field.kind === "group") return value ? formBody(field.fields, value) : undefined;
   if (field.kind === "list") return Array.isArray(value) ? value.map((item) => formBody(field.fields, item)) : undefined;
   if (field.kind === "outline") return Array.isArray(value) && value.length ? value.map((point) => ({ latitude: Number(point.latitude), longitude: Number(point.longitude) })) : undefined;
@@ -600,3 +603,64 @@ export function formBody(fields, values) {
   }
   return body;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Answering a questionnaire: the order of its questions and what goes to the API
+
+const byIndex = (a, b) => (a.index || 0) - (b.index || 0);
+
+/** The questions of a questionnaire in the order they are asked. */
+export function questionOrder(questions) {
+  return [...(questions || [])].sort(byIndex);
+}
+
+/**
+ * The next question to ask, or null when the questionnaire is done. `answered` holds per
+ * question ID the IDs of the answer options that were picked (none for an open answer).
+ * After a question the next one in order follows, unless a picked answer option jumps to a
+ * later question; of several picked options the first in order with such a jump decides.
+ * A jump back is not followed, so a questionnaire always ends.
+ */
+export function openQuestion(questions, answered) {
+  const order = questionOrder(questions);
+  let at = 0;
+  while (at < order.length) {
+    const question = order[at];
+    const picked = answered[question.ID];
+    if (!picked) return question;
+    const jump = [...(question.answers || [])]
+      .sort(byIndex)
+      .filter((answer) => picked.includes(answer.ID) && answer.nextQuestionID)
+      .map((answer) => order.findIndex((other) => other.ID === answer.nextQuestionID))
+      .find((target) => target > at);
+    at = jump === undefined ? at + 1 : jump;
+  }
+  return null;
+}
+
+/** What was answered for a report, as `openQuestion` takes it, from the account's responses. */
+export function answeredOf(responses, interactionID) {
+  const answered = {};
+  for (const response of responses || []) {
+    const interaction = response.interactionID || (response.interaction && response.interaction.ID);
+    const question = response.questionID || (response.question && response.question.ID);
+    if (String(interaction) !== String(interactionID) || !question) continue;
+    const answer = response.answerID || (response.answer && response.answer.ID);
+    answered[question] = [...(answered[question] || []), ...(answer ? [answer] : [])];
+  }
+  return answered;
+}
+
+/**
+ * The responses to send for one question: one per picked answer option. WildlifeNL only takes
+ * a text of its own for a question with at most one answer option, so with picked options
+ * the text goes along with the first.
+ */
+export function responseBodies(question, interactionID, picked, text) {
+  const words = String(text || "").trim();
+  const base = { interactionID, questionID: question.ID };
+  if (picked.length) return picked.map((answerID, index) => ({ ...base, answerID, ...(index === 0 && words ? { text: words } : {}) }));
+  if (!words) throw new Error("Give an answer first.");
+  return [{ ...base, text: words }];
+}
+

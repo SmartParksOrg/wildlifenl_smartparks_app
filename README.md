@@ -71,7 +71,7 @@ The app reads from WildlifeNL itself which changes it accepts and which roles ea
 | --- | --- | --- |
 | Add an animal, put a sensor on an animal | Animals, the page of an animal | `herd-manager` |
 | Draw a zone, add or remove its species, deactivate it | Zones, the page of a zone | `land-user` or `wildlife-manager` |
-| Make a report: a sighting, damage or a collision | Reports | Any account |
+| Make a report: a sighting, damage or a collision, and answer the questions an experiment has about it | Reports, the page of a report | Any account |
 | Add an experiment, change, end or delete it, add its questionnaires, questions, answer options and messages | Experiments and the pages under it | `researcher`, and only for your own experiments |
 | Add or change a species, a living lab or a report type | Species, Living labs, Report types | `administrator` |
 | Add a person, give or take away a role | People, the page of a person | `administrator` |
@@ -79,7 +79,11 @@ The app reads from WildlifeNL itself which changes it accepts and which roles ea
 
 A form asks for exactly what WildlifeNL takes, checks it before it is sent, and shows the answer of WildlifeNL when it refuses. A place is typed or clicked on a map, an area is drawn on it. Deleting and deactivating ask first.
 
-The app does not send readings, detections, tracking readings, contacts or responses to questionnaires; those come from collars, camera traps and the phone apps. It also cannot delete your account.
+The app does not send readings, detections, tracking readings or contacts; those come from collars, camera traps and the phone apps. It also cannot delete your account.
+
+### Questions about a report
+
+A running experiment can have a questionnaire for the kind of report you make. WildlifeNL then sends it back with your report, and the app asks its questions one at a time: pick one answer, tick several, or write a text, as the question allows. An answer can skip questions that no longer apply. Each answer is sent at once, so you can stop halfway and go on later with "Answer the questions" on the page of the report. My answers lists what you answered.
 
 ### Records are linked
 

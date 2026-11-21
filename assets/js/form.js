@@ -31,8 +31,16 @@ function select(field, options, value) {
   return { node: labelled(field, node), read: () => node.value };
 }
 
+/** Several of a list of choices, a tick each. */
+function ticks(field, options) {
+  const boxes = options.map((option) => el("input", { type: "checkbox", value: option.value }));
+  const node = el("fieldset", { class: "form-group" }, [el("legend", { text: caption(field) }), hint(field), ...options.map((option, index) => el("label", { class: "check" }, [boxes[index], el("span", { text: option.label })]))]);
+  return { node, read: () => boxes.filter((box) => box.checked).map((box) => box.value) };
+}
+
 /** One value: a text, a number, a moment, a tick or a choice. */
 function scalar(field, value, choices) {
+  if (field.kind === "ticks") return ticks(field, choices || []);
   if (choices) return select(field, choices, value);
   if (field.kind === "choice") return select(field, field.options.map((option) => ({ value: option, label: option })), value);
   if (field.kind === "yesno") {
@@ -287,6 +295,9 @@ export function wireForm() {
     if ($("formSubmit").disabled) event.preventDefault();
   });
   $("formDialog").addEventListener("close", () => {
+    // the browser tells of a close a moment later; by then the next form of a row of
+    // questions may be open, and that one is not cancelled
+    if ($("formDialog").open) return;
     if (map) map.onClick = null;
     if (settle) settle(null);
     settle = null;

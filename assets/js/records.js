@@ -4,7 +4,7 @@
 // in the data is a link in the app.
 
 import { SCOPES } from "./api.js";
-import { detections, loadDetections } from "./detections.js";
+import { detections, loadDetections, loadOwnReports } from "./detections.js";
 import { buildHash } from "./lib.js";
 import { loadPeople, people, personName } from "./people.js";
 import { account, hasScope } from "./session.js";
@@ -27,9 +27,8 @@ async function visits(lab) {
 /** Reports found on the map plus the ones the account made itself. */
 async function reports() {
   await loadDetections();
-  const all = new Map(detections.reports);
-  for (const report of await account.api.list("/interactions/me/")) all.set(report.ID, report);
-  return [...all.values()];
+  await loadOwnReports();
+  return [...detections.reports.values()];
 }
 
 /** A list that the people module has read: the account's own, or every experiment's. */

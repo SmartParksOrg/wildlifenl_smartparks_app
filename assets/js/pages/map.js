@@ -5,7 +5,7 @@
 // from people, living labs and zones.
 
 import { SCOPES } from "../api.js";
-import { counted, detections, detectorsOf, loadDetections, onDetections, reportPlace, searchBox, searchesAnimals, speciesName, stopSearch } from "../detections.js";
+import { counted, detections, detectorsOf, loadDetections, loadOwnReports, onDetections, reportPlace, searchBox, searchesAnimals, speciesName, stopSearch } from "../detections.js";
 import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toTime, trackLength, webLink, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
 import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, personName } from "../people.js";
@@ -835,6 +835,11 @@ export async function show({ query }) {
   await reload();
   const areasLoaded = loadAreas();
   if (hasScope(SCOPES.detections) || hasScope(SCOPES.reports)) loadDetections();
+  // every account sees its own reports on the map
+  const ownLoaded = loadOwnReports().catch((error) => {
+    const text = explain(error);
+    if (text) toast(text, true);
+  });
   const peopleLoaded = loadPeople();
   if (query.layers) {
     openTab(TABS.includes(query.layers) ? query.layers : "animals");
@@ -851,6 +856,7 @@ export async function show({ query }) {
     if (areas.some((area) => area.id === query.area)) select("areas", query.area, true);
   }
   if (query.detector || query.report) {
+    await ownLoaded;
     await searchDone();
     const detector = query.detector && detectorsOf().find((d) => d.name === query.detector);
     if (detector) select("detectors", detector.id, true);

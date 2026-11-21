@@ -14,6 +14,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - Lists of what is yours: My reports, My answers, My messages, My alarms and My zones. A researcher goes from all experiments to the own ones with one button.
 
+- After a report the app asks the questions a running experiment has about it, and sends the answers. You can stop halfway and go on later from the page of the report.
+- Your own reports are on the live map, under Events, for every account.
 - An area manager or wildlife manager finds the animals in an area with "Search this view" on the live map. Found animals are remembered and have a page, a track and charts like the animals a herd manager lists.
 
 ### Changed

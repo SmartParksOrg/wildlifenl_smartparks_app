@@ -3,7 +3,9 @@
 // description (rights.js), and so do the fields of its form, so an action follows the server
 // the account is signed in to.
 
+import { answerReport } from "./answering.js";
 import { SCOPES } from "./api.js";
+import { loadOwnReports } from "./detections.js";
 import { openForm } from "./form.js";
 import { formFields, formValues } from "./lib.js";
 import { loadPeople } from "./people.js";
@@ -37,7 +39,10 @@ const reloadPeople = () => loadPeople(true).catch(() => {}); // the pages that s
  * - `needs` are the roles for a call the API leaves open to every account but only carries
  *   out for the owner.
  * - `text` explains the action; with `confirm` it is all the dialog asks.
- * - `gone` says the record is no more afterwards; `after()` refreshes what else changed.
+ * - `gone` says the record is no more afterwards; `after(result)` does what follows, with
+ *   what WildlifeNL answered.
+ * - `run(record)` does the whole action itself, in place of one form and one call; `call`
+ *   then only says which call decides who may.
  */
 export const ACTIONS = {
   species: [
@@ -63,7 +68,13 @@ export const ACTIONS = {
       // the API asks for the details that belong to the type: 1 sighting, 2 damage, 3 collision
       when: { reportOfSighting: (values) => values.typeID === "1", reportOfDamage: (values) => values.typeID === "2", reportOfCollision: (values) => values.typeID === "3" },
       text: "A report of your own: a sighting, damage or a collision. Location is where you were, place is where it happened.",
+      // the report shows on the live map, and a running experiment may have questions about it
+      after: async (report) => {
+        await loadOwnReports(true);
+        if (report && report.questionnaire) await answerReport(report);
+      },
     },
+    { label: "Answer the questions", where: "record", call: ["POST", "/response/"], run: answerReport, show: (report) => own(report) && Boolean(report.questionnaire) },
   ],
   "report-types": [
     { label: "Add report type", where: "list", call: ["POST", "/interactionType/"] },
@@ -149,6 +160,10 @@ async function choicesOf(fields, action, record) {
 /** Asks for the fields of an action, or to confirm it, and makes the call. Resolves to
  * `{result}` with what WildlifeNL answered, or to null when the person cancelled. */
 export async function runAction(kind, action, record = null) {
+  if (action.run) {
+    const result = await action.run(record);
+    return result ? { result } : null;
+  }
   const document = await loadApi();
   const [method, template] = action.call;
   const operation = operationOf(method, template);
@@ -174,7 +189,7 @@ export async function runAction(kind, action, record = null) {
   if (record && TYPES[kind]) forget(kind, record.ID);
   const { result } = done;
   if (result && result.ID != null && TYPES[kind] && (!record || String(result.ID) === String(record.ID))) remember(kind, result);
-  if (action.after) await action.after();
+  if (action.after) await action.after(result);
   return done;
 }
 

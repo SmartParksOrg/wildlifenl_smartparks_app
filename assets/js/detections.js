@@ -63,6 +63,8 @@ function kindsFor(area) {
 const listeners = new Set();
 let run = 0;
 let lastStart = 0;
+/** The reports the account made itself, which every account may read. */
+let ownReports = null;
 
 /** Calls `listener` whenever the detections or the progress change. */
 export function onDetections(listener) {
@@ -172,12 +174,21 @@ async function search(centres, label, area = false) {
   changed();
 }
 
+/** Reads the reports the account made itself, once, and puts them with the reports found on
+ * the map, so they are a layer of the live map for every account; `force` reads them again. */
+export async function loadOwnReports(force = false) {
+  if (!ownReports || force) ownReports = await account.api.list("/interactions/me/");
+  for (const report of ownReports) detections.reports.set(report.ID, report);
+  changed();
+}
+
 /** Loads the period at the known places, once; `force` loads it again. */
 export function loadDetections(force = false) {
   if (detections.loaded && !force) return;
   detections.loaded = true;
   detections.found.clear();
   detections.reports.clear();
+  for (const report of ownReports || []) detections.reports.set(report.ID, report); // these do not depend on the period
   const centres = coverPlaces(knownPlaces(), MAX_RADIUS_M * 0.9);
   if (centres.length) return search(centres, "Loading known area");
   run++;
@@ -252,6 +263,7 @@ export function resetDetections() {
   run++;
   detections.found.clear();
   detections.reports.clear();
+  ownReports = null;
   detections.animals = 0;
   detections.from = dateText(Date.now() - DEFAULT_DAYS * DAY);
   detections.to = dateText(Date.now());

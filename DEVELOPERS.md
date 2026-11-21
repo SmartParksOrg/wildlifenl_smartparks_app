@@ -103,6 +103,7 @@ The app reads the roles for a write call, and the fields the call takes, from th
 - `formFields` in `lib.js` turns the schema of a body into fields: it skips what is `readOnly`, and names a kind per field (text, number, moment, choice, place, outline, details, list of details). `formValues` fills a form from a record (`speciesID` from `species.ID`, the way the API returns what it takes) and `formBody` turns the form back into the body. Both have tests.
 - `form.js` draws the fields in a native `<dialog>`. The browser checks what is needed, the shortest length, the pattern and the bounds; `formBody` checks the rest. A field named after a kind of record (`REFERS` in `writes.js`) is a list to pick from. A place is two numbers or a click on the map of the dialog; an outline is drawn there corner by corner. Optional details are shown by a rule of the action (`when`) or ticked by the person.
 - An error of the API is shown in the dialog, which stays open with what was typed.
+- An action with `run(record)` does everything itself in place of one form and one call; its `call` only says which call decides who may. "Answer the questions" is one.
 - After a change `runAction` drops what `records.js` remembered of the record (`forget`), keeps the answer when it is the record itself (`remember`), and the page reads again.
 
 Facts from the API's source that shaped the actions:
@@ -113,6 +114,18 @@ Facts from the API's source that shaped the actions:
 - `PUT /profile/me/` replaces the whole profile, also the token for notifications the phone app stored (`firebaseCloudMessagingToken`). The form does not show that field and sends it back as it was (`hide`).
 - A zone and a living lab need an outline of three or more points. A deactivated zone cannot be switched on again.
 - A report of type 1, 2 or 3 needs the details of a sighting, damage or a collision.
+
+### Answering a questionnaire
+
+`POST /interaction/` answers with the report and, when a running experiment has a questionnaire for that kind of report and place, with that questionnaire, its questions and their answer options. `answering.js` asks them through the dialog of `form.js`, one form per question, and sends one `POST /response/` per picked answer option. The rules are pure functions in `lib.js`:
+
+- `openQuestion(questions, answered)` gives the next question: the questions go by `index`, and a picked answer option with a `nextQuestionID` jumps to that question when it comes later. A jump back is not followed, so a questionnaire always ends. Of several picked options the first in order with a jump decides.
+- `answeredOf(responses, interactionID)` reads what was answered from `GET /responses/me/`. That is why stopping halfway needs no draft: the next time, the first question without a response is asked.
+- `responseBodies` puts a typed text with the first picked option, because the API only takes a text on its own for a question with at most one answer option.
+
+A format of an open answer (`openResponseFormat`) is the `pattern` of the input; the API checks it again and its refusal shows in the dialog. A message the API returns with a response (a conveyance) is shown as a notice.
+
+The reports an account made itself (`GET /interactions/me/`) join the reports found on the map in `detections.js` (`loadOwnReports`), so they are on the live map for every account.
 
 To offer another call: add an action to `ACTIONS`. To check by hand, sign in on the test server. Not offered on purpose: the calls of machines and phone apps (readings, detections, tracking readings, contacts, responses) and deleting the own profile.
 
