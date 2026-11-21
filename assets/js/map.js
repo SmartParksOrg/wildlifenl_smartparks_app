@@ -1,18 +1,51 @@
-// Maps on MapLibre GL JS with the base maps Smart Parks Protect uses (OpenFreeMap, no key).
-// MapView is the small map of a page (points and a track); LiveMap is the live map with a
-// marker per sensor, coloured tracks and detections.
+// Maps on MapLibre GL JS. MapView is the small map of a page (points, a track, a search
+// circle); LiveMap is the live map with a marker per sensor, coloured tracks, detections and
+// the measuring line.
 
-/** The default follows the theme: Light by day, Night at night. */
+const FONT = ["Noto Sans Regular"]; // the glyphs OpenFreeMap serves
+const GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
+
+/** A base map of picture tiles from one address, as a MapLibre style. */
+function rasterStyle(tiles, attribution, maxzoom) {
+  return {
+    version: 8,
+    glyphs: GLYPHS,
+    sources: { base: { type: "raster", tiles: [tiles], tileSize: 256, maxzoom, attribution } },
+    layers: [{ id: "base", type: "raster", source: "base" }],
+  };
+}
+
+/** The base maps. The first five are OpenFreeMap's vector styles, the ones Protect uses; the
+ * photo and topographic ones are free picture tiles that need no key. The default follows
+ * the theme: Light by day, Night at night. `dark` marks a ground that needs light labels. */
 export const BASEMAPS = {
   auto: { label: "Follows the theme", style: "positron" },
   liberty: { label: "Streets", style: "liberty" },
   positron: { label: "Light", style: "positron" },
   bright: { label: "Bright", style: "bright" },
-  dark: { label: "Night", style: "fiord" },
+  dark: { label: "Night", style: "fiord", dark: true },
+  satellite: {
+    label: "Satellite",
+    dark: true,
+    style: rasterStyle("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", "Imagery © Esri, Maxar, Earthstar Geographics", 19),
+  },
+  aerial: {
+    label: "Aerial photo (Netherlands)",
+    dark: true,
+    style: rasterStyle("https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg", "Aerial photo © Beeldmateriaal Nederland, CC BY 4.0", 19),
+  },
+  topo: {
+    label: "Topographic",
+    style: rasterStyle("https://a.tile.opentopomap.org/{z}/{x}/{y}.png", "Map © OpenTopoMap (CC BY-SA), data © OpenStreetMap contributors", 17),
+  },
 };
+/** Elevation for the 3D terrain: the open Terrain Tiles on AWS, no key needed. */
+const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+const TERRAIN_EXAGGERATION = 1.3;
+const TERRAIN_PITCH = 55;
+const TERRAIN_KEY = "wnl-terrain";
 const BASEMAP_KEY = "wnl-basemap";
 const NETHERLANDS = { center: [5.3, 52.1], zoom: 6.5 };
-const FONT = ["Noto Sans Regular"]; // the glyphs OpenFreeMap serves
 const GREEN = "#52735E";
 const CORAL = "#D9825F";
 const MAX_TRACK_DOTS = 2000;
@@ -53,13 +86,23 @@ function saveBasemap(key) {
   }
 }
 
+/** Whether the ground of a base map is dark, so labels and tracks must be light. */
 function nightMap(key) {
-  return key === "dark" || (key === "auto" && darkTheme());
+  return key === "auto" ? darkTheme() : Boolean(BASEMAPS[key] && BASEMAPS[key].dark);
 }
 
-function styleUrl(key) {
-  const style = nightMap(key) ? "fiord" : (BASEMAPS[key] || BASEMAPS.auto).style;
-  return `https://tiles.openfreemap.org/styles/${style}`;
+/** The MapLibre style of a base map: an OpenFreeMap address or a picture tile style. */
+function styleOf(key) {
+  const style = key === "auto" && darkTheme() ? "fiord" : (BASEMAPS[key] || BASEMAPS.auto).style;
+  return typeof style === "string" ? `https://tiles.openfreemap.org/styles/${style}` : style;
+}
+
+export function loadTerrain() {
+  try {
+    return localStorage.getItem(TERRAIN_KEY) === "on";
+  } catch {
+    return false;
+  }
 }
 
 export function escapeHtml(value) {
@@ -156,10 +199,12 @@ function pointFeature(lng, lat, properties) {
 /** What both maps share: the map itself, its controls, the base map and redrawing the layers
  * after a style change. A subclass gives `sources()` and `layers()`. */
 class BaseMap {
-  /** @param {HTMLElement} container */
-  constructor(container) {
+  /** @param {HTMLElement} container
+   * @param controls the corner of the zoom, north and locate buttons */
+  constructor(container, controls = "top-right") {
     this.container = container;
     this.basemap = loadBasemap();
+    this.terrain = false;
     this.map = null;
     this.ready = false; // true once the style is in, so layers can be added
     if (!window.maplibregl) {
@@ -167,12 +212,13 @@ class BaseMap {
       return;
     }
     const gl = window.maplibregl;
-    this.map = new gl.Map({ container, style: styleUrl(this.basemap), ...NETHERLANDS, attributionControl: { compact: true } });
-    this.map.addControl(new gl.NavigationControl({ visualizePitch: false }), "top-right");
-    this.map.addControl(new gl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
+    this.map = new gl.Map({ container, style: styleOf(this.basemap), ...NETHERLANDS, attributionControl: { compact: true }, maxPitch: 75 });
+    this.map.addControl(new gl.NavigationControl({ visualizePitch: true }), controls);
+    this.map.addControl(new gl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), controls);
     this.map.addControl(new gl.ScaleControl(), "bottom-left");
     this.map.on("style.load", () => {
       this.ready = true;
+      this.applyTerrain();
       this.draw();
     });
     new ResizeObserver(() => this.map.resize()).observe(container);
@@ -189,7 +235,41 @@ class BaseMap {
 
   restyle() {
     this.ready = false;
-    this.map.setStyle(styleUrl(this.basemap));
+    this.map.setStyle(styleOf(this.basemap));
+  }
+
+  /** 3D terrain on any base map, as in Protect: the relief under the data and the ground
+   * raised, with the camera tilted so it shows. */
+  setTerrain(on) {
+    this.terrain = on;
+    try {
+      localStorage.setItem(TERRAIN_KEY, on ? "on" : "off");
+    } catch {
+      /* the choice lasts for this page only */
+    }
+    if (!this.map || !this.ready) return;
+    this.applyTerrain();
+    this.map.easeTo({ pitch: on ? TERRAIN_PITCH : 0, duration: 600 });
+  }
+
+  /** A style change drops sources and layers, so this runs again after each one. */
+  applyTerrain() {
+    const map = this.map;
+    // two sources of the same tiles: MapLibre draws the relief better when it does not share
+    // its source with the raised ground
+    const dem = { type: "raster-dem", tiles: [TERRAIN_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 15, attribution: "Elevation: Terrain Tiles on AWS" };
+    if (!this.terrain) {
+      if (map.getTerrain()) map.setTerrain(null);
+      if (map.getLayer("terrain-hillshade")) map.removeLayer("terrain-hillshade");
+      for (const id of ["terrain-dem", "terrain-relief"]) if (map.getSource(id)) map.removeSource(id);
+      return;
+    }
+    for (const id of ["terrain-dem", "terrain-relief"]) if (!map.getSource(id)) map.addSource(id, dem);
+    if (!map.getLayer("terrain-hillshade")) {
+      const first = this.layers(false).find((layer) => map.getLayer(layer.id));
+      map.addLayer({ id: "terrain-hillshade", type: "hillshade", source: "terrain-relief", paint: { "hillshade-shadow-color": "#473B24", "hillshade-exaggeration": 0.4 } }, first && first.id);
+    }
+    if (!map.getTerrain()) map.setTerrain({ source: "terrain-dem", exaggeration: TERRAIN_EXAGGERATION });
   }
 
   /** Puts the sources and layers on the map, or refreshes the data of the ones that exist. */
@@ -226,7 +306,7 @@ class BaseMap {
 
   pointer(layer) {
     this.map.on("mouseenter", layer, () => (this.map.getCanvas().style.cursor = "pointer"));
-    this.map.on("mouseleave", layer, () => (this.map.getCanvas().style.cursor = ""));
+    this.map.on("mouseleave", layer, () => (this.map.getCanvas().style.cursor = this.measuring ? "crosshair" : ""));
   }
 }
 
@@ -267,14 +347,16 @@ export class MapView extends BaseMap {
 
   /** Draws a search circle of `radius` metres and reports clicks beside the points. */
   setCircle(center, radius, onGround) {
-    this.circle = { center, radius };
+    this.circle = center ? { center, radius } : null;
     this.onGround = onGround;
     this.draw();
   }
 
-  fitCircle() {
-    if (!this.circle) return;
-    this.fit(circleFeature(this.circle.center, this.circle.radius).geometry.coordinates[0].map(([lng, lat]) => ({ lng, lat })));
+  /** The box the map shows, `{south, west, north, east}`. */
+  bounds() {
+    if (!this.map) return null;
+    const box = this.map.getBounds();
+    return { south: box.getSouth(), west: box.getWest(), north: box.getNorth(), east: box.getEast() };
   }
 
   sources() {
@@ -314,8 +396,12 @@ export class MapView extends BaseMap {
  * detections. The page hears about clicks through `onSensor`, `onTrackPoint` and `onNothing`. */
 export class LiveMap extends BaseMap {
   /** `describePoint(track, point)` gives `[title, lines]` for the popup of a track point. */
-  constructor(container, { onSensor, onNothing, describePoint }) {
-    super(container);
+  constructor(container, { onSensor, onNothing, describePoint, onMeasure }) {
+    super(container, "bottom-right");
+    this.terrain = loadTerrain();
+    if (this.map && this.terrain) this.map.setPitch(TERRAIN_PITCH);
+    this.measuring = false;
+    this.measure = [];
     this.sensors = [];
     this.tracks = [];
     this.detections = [];
@@ -323,6 +409,7 @@ export class LiveMap extends BaseMap {
     this.making = new Set();
     if (!this.map) return;
     this.map.on("click", async (event) => {
+      if (this.measuring) return onMeasure({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       const hits = this.map.queryRenderedFeatures(event.point, { layers: CLICKABLE.filter((id) => this.map.getLayer(id)) });
       const hit = hits[0];
       if (!hit) return onNothing();
@@ -384,6 +471,18 @@ export class LiveMap extends BaseMap {
     this.draw();
   }
 
+  /** While measuring, a click adds a point to the line instead of selecting something. */
+  setMeasuring(on) {
+    this.measuring = on;
+    if (this.map) this.map.getCanvas().style.cursor = on ? "crosshair" : "";
+  }
+
+  /** @param {{lat:number,lng:number}[]} points the measuring line */
+  setMeasure(points) {
+    this.measure = points;
+    this.draw();
+  }
+
   flyTo(place) {
     if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600 });
   }
@@ -410,6 +509,8 @@ export class LiveMap extends BaseMap {
         }),
       ),
       detections: collection(this.detections.map((d) => pointFeature(d.lng, d.lat, { html: popupHtml(d.title, d.lines) }))),
+      "measure-line": collection(this.measure.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.measure.map((p) => [p.lng, p.lat]) } }] : []),
+      "measure-points": collection(this.measure.map((p) => pointFeature(p.lng, p.lat, {}))),
       // a sensor joins the map once its marker image is made, a moment after the first draw
       sensors: collection(
         this.sensors
@@ -425,6 +526,8 @@ export class LiveMap extends BaseMap {
     return [
       { id: "track-lines", type: "line", source: "track-lines", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-opacity": 0.9 } },
       { id: "track-points", type: "circle", source: "track-points", paint: { "circle-radius": 3.5, "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": 2 } },
+      { id: "measure-line", type: "line", source: "measure-line", paint: { "line-color": night ? "#ffffff" : "#1f2a24", "line-width": 2, "line-dasharray": [2, 2] } },
+      { id: "measure-points", type: "circle", source: "measure-points", paint: { "circle-radius": 4, "circle-color": "#ffffff", "circle-stroke-color": night ? "#ffffff" : "#1f2a24", "circle-stroke-width": 2 } },
       { id: "detections", type: "circle", source: "detections", paint: { "circle-radius": 6, "circle-color": CORAL, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } },
       {
         id: "sensor-clusters",

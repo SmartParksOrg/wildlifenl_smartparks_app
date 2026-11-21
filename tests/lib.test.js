@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, circleGrid, countPerDay, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -188,4 +188,33 @@ test("databaseModel finds the tables, their fields and their links", () => {
   assert.equal(model.tables.find((t) => t.name === "Species").fields[1].description, "The Latin binomen.");
   const pairs = model.links.map((l) => `${l.from}>${l.to}${l.many ? "*" : ""}`).sort();
   assert.deepEqual(pairs, ["Animal>Species", "BorneSensorDeployment>Animal", "BorneSensorDeployment>BorneSensorReading*", "BorneSensorReading>User", "Gadget>User"]);
+});
+
+test("circleGrid covers the whole box", () => {
+  const box = { south: 52.0, west: 5.0, north: 52.5, east: 6.0 };
+  const radius = 10000;
+  const centres = circleGrid(box, radius);
+  assert.ok(centres.length > 10 && centres.length < 40, String(centres.length));
+  for (let lat = box.south; lat <= box.north; lat += 0.02) {
+    for (let lng = box.west; lng <= box.east; lng += 0.02) {
+      const nearest = Math.min(...centres.map((c) => distanceMeters(c, { lat, lng })));
+      assert.ok(nearest <= radius, `(${lat}, ${lng}) is ${Math.round(nearest)} m from a centre`);
+    }
+  }
+  assert.equal(circleGrid({ south: 52, west: 5, north: 52.001, east: 5.001 }, radius).length >= 1, true);
+});
+
+test("coverPlaces needs one search for places close together", () => {
+  const haarlem = { lat: 52.39, lng: 4.59 };
+  const near = { lat: 52.4, lng: 4.6 };
+  const utrecht = { lat: 52.09, lng: 5.12 };
+  assert.deepEqual(coverPlaces([haarlem, near, utrecht], 9000), [haarlem, utrecht]);
+  assert.deepEqual(coverPlaces([], 9000), []);
+});
+
+test("countPerDay counts per local day and fills the empty days", () => {
+  const day = (d, h) => new Date(2026, 10, d, h).getTime();
+  const series = countPerDay([day(1, 9), day(1, 23), day(3, 1), NaN]);
+  assert.deepEqual(series, [[day(1, 0), 2], [day(2, 0), 0], [day(3, 0), 1]]);
+  assert.deepEqual(countPerDay([]), []);
 });

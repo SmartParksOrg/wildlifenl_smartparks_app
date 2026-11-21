@@ -1,11 +1,12 @@
-// The live map: a marker per sensor, the layers panel that chooses what is shown, tracks and
-// the panel of the selected sensor. It follows the live map of Smart Parks Protect.
+// The live map, laid out like the live map of Smart Parks Protect: a marker per sensor, the
+// Layers button top left, the tools as square buttons top right (base map, 3D terrain,
+// measure, tracks) and the panels in a column beside them.
 
 import { SCOPES } from "../api.js";
-import { ago, buildHash, formatDistance, speciesIcon, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
+import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, MAX_RADIUS_M, TRACK_COLORS, loadBasemap, trackColor } from "../map.js";
 import { account, explain, hasScope } from "../session.js";
-import { addSensor, canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorById } from "../store.js";
+import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 
 const HIDDEN_KEY = "wnl-map-hidden";
@@ -20,6 +21,7 @@ let hidden = new Set(readHidden());
 const tracks = new Map();
 let selected = "";
 let fitted = false;
+let measure = [];
 
 function readHidden() {
   try {
@@ -60,6 +62,13 @@ function pointLines(point) {
   ];
 }
 
+/** A square icon button of a panel; `on` fills it. */
+function iconButton(name, label, onclick, { on = false, href = "", disabled = false } = {}) {
+  const attrs = { class: `btn ${on ? "primary" : "outline"} icon`, title: label, "aria-label": label };
+  if (href) return el("a", { ...attrs, href }, icon(name));
+  return el("button", { ...attrs, type: "button", disabled, onclick, "aria-pressed": String(on) }, icon(name));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Drawing
 
@@ -82,8 +91,10 @@ function drawTracks() {
   });
   map.setTracks(drawn);
   const points = drawn.reduce((sum, track) => sum + track.points.length, 0);
-  $("mapTracks").hidden = drawn.length === 0;
-  $("mapTracksText").textContent = `${plural(drawn.length, "track")}, ${plural(points, "point")} over`;
+  $("mapTracksWrap").hidden = drawn.length === 0;
+  $("mapTracksBadge").textContent = drawn.length;
+  $("mapTracksText").textContent = `${plural(drawn.length, "track")}, ${plural(points, "point")}`;
+  if (!drawn.length) showCard("tracksCard", false);
 }
 
 function drawLayerList() {
@@ -112,7 +123,7 @@ function drawLayerList() {
             locate,
           ]);
         })
-      : [el("div", { class: "picker-empty", text: sensors.length ? "No sensor matches the search." : canListSensors() ? "WildlifeNL has no active sensor deployments. Add a sensor by its ID." : "Add a sensor by its ID to see it on the map." })]),
+      : [el("div", { class: "picker-empty" }, sensors.length ? "No sensor matches the search." : ["No sensors yet. Add one by its ID on the ", el("a", { href: buildHash("sensors"), text: "Sensors page" }), "."])]),
   );
 }
 
@@ -126,15 +137,12 @@ function drawObjectPanel() {
   const track = loaded ? loaded.track : [];
   const last = track[track.length - 1];
   const readings = loaded ? loaded.readings : [];
-  const newest = readings.reduce((best, r) => (toTime(r.timestamp) > toTime(best && best.timestamp) || !best ? r : best), null);
-  const latest = (read) => {
-    const withValue = readings.filter((r) => typeof read(r) === "number").sort((a, b) => toTime(a.timestamp) - toTime(b.timestamp));
-    return withValue.length ? read(withValue[withValue.length - 1]) : null;
-  };
-  const temperature = latest((r) => r.temperature);
-  const list = el("dl", { class: "facts" });
+  const newest = readings.reduce((best, r) => (!best || toTime(r.timestamp) > toTime(best.timestamp) ? r : best), null);
+  const withTemperature = readings.filter((r) => typeof r.temperature === "number").sort((a, b) => toTime(a.timestamp) - toTime(b.timestamp));
+  const temperature = withTemperature.length ? withTemperature[withTemperature.length - 1].temperature : null;
   const tracked = tracks.has(sensor.id);
   const inPeriod = trackPoints(sensor.id);
+  const list = el("dl", { class: "facts" });
   facts(list, [
     ["Sensor ID", sensor.id],
     ["Last seen", loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
@@ -148,13 +156,14 @@ function drawObjectPanel() {
     el("div", { class: "panel-head" }, [
       el("img", { class: "object-icon", src: `assets/img/icons/${iconOf(sensor)}.svg`, alt: "" }),
       el("div", { class: "object-title" }, [el("strong", { text: sensor.name }), el("small", { text: sensor.species ? `sensor on ${sensor.species.toLowerCase()}` : "sensor" })]),
-      el("button", { class: "btn ghost icon sm", type: "button", "aria-label": "Close", onclick: () => select("") }, icon("x")),
+      el("button", { class: "btn ghost icon sm", type: "button", "aria-label": "Close", title: "Close", onclick: () => select("") }, icon("x")),
     ]),
     list,
     el("div", { class: "row" }, [
-      el("button", { class: "btn primary sm", type: "button", onclick: () => toggleTrack(sensor.id) }, [icon("route"), tracked ? "Hide the track" : "Show the track"]),
-      el("a", { class: "btn outline sm", href: buildHash("sensors", sensor.id) }, [icon("sensor"), "Sensor"]),
-      el("a", { class: "btn outline sm", href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }, [icon("chart"), "Data"]),
+      iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { on: tracked }),
+      iconButton("locate", "Centre the map here", () => sensor.place && map.flyTo(sensor.place), { disabled: !sensor.place }),
+      iconButton("sensor", "Open the sensor page", null, { href: buildHash("sensors", sensor.id) }),
+      iconButton("chart", "Open in the data explorer", null, { href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }),
     ]),
   );
 }
@@ -164,6 +173,63 @@ function redraw() {
   drawTracks();
   drawLayerList();
   drawObjectPanel();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tools: base map, terrain, measure
+
+function showCard(id, open) {
+  $(id).hidden = !open;
+  const button = { layerPanel: "mapLayersButton", tracksCard: "mapTracksButton" }[id];
+  if (button) $(button).setAttribute(id === "layerPanel" ? "aria-expanded" : "aria-pressed", String(open));
+  if (button === "mapTracksButton") $(button).classList.toggle("active", open);
+}
+
+function drawBasemapMenu() {
+  $("mapBasemapMenu").replaceChildren(
+    ...Object.entries(BASEMAPS).map(([key, basemap]) =>
+      el("button", { class: "menu-item", type: "button", role: "menuitemradio", "aria-checked": String(key === map.basemap), onclick: () => chooseBasemap(key) }, [key === map.basemap ? icon("check-small") : el("span", { class: "icon" }), basemap.label]),
+    ),
+  );
+}
+
+function openBasemapMenu(open) {
+  $("mapBasemapMenu").hidden = !open;
+  $("mapBasemapButton").setAttribute("aria-expanded", String(open));
+}
+
+function chooseBasemap(key) {
+  map.setBasemap(key);
+  drawBasemapMenu();
+  openBasemapMenu(false);
+}
+
+function drawTerrain() {
+  const button = $("mapTerrain");
+  button.classList.toggle("active", map.terrain);
+  button.setAttribute("aria-pressed", String(map.terrain));
+  button.title = map.terrain ? "Flat map" : "3D terrain";
+  button.setAttribute("aria-label", button.title);
+}
+
+function setMeasuring(on) {
+  measure = [];
+  map.setMeasuring(on);
+  map.setMeasure(measure);
+  $("measureCard").hidden = !on;
+  const button = $("mapMeasure");
+  button.classList.toggle("active", on);
+  button.setAttribute("aria-pressed", String(on));
+  button.title = on ? "Stop measuring" : "Measure";
+  button.setAttribute("aria-label", button.title);
+  drawMeasure();
+}
+
+function drawMeasure() {
+  map.setMeasure(measure);
+  let total = 0;
+  for (let i = 1; i < measure.length; i++) total += distanceMeters(measure[i - 1], measure[i]);
+  $("measureText").textContent = measure.length > 1 ? formatDistance(total) : "Measure";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -211,13 +277,13 @@ async function toggleTrack(id, force) {
     else {
       const points = trackPoints(id);
       if (points.length > 1) map.fit(points, { animate: true });
-      else toast(points.length ? "Only one position in this period" : "No positions in this period. Choose a longer track length.");
+      else toast(points.length ? "Only one position in this period" : "No positions in this period. Choose a longer track length under Tracks.");
     }
   }
   redraw();
 }
 
-/** Sensors without a place get their readings in the background, three at a time. */
+/** Sensors without a place get their newest readings in the background, three at a time. */
 async function locateTheRest() {
   const queue = sensors.filter((sensor) => !sensor.place && !recentReadings(sensor.id));
   const worker = async () => {
@@ -238,12 +304,13 @@ async function loadDetections() {
   if (!$("mapDetections").checked) return map.setDetections([]);
   try {
     const center = map.center();
+    const radius = Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius()));
     const detections = await account.api.detections({
       start: new Date(Date.now() - DETECTION_DAYS * 24 * HOUR).toISOString(),
       end: new Date().toISOString(),
       latitude: center.lat,
       longitude: center.lng,
-      radius: Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius())),
+      radius,
     });
     map.setDetections(
       detections
@@ -251,7 +318,7 @@ async function loadDetections() {
         .filter((x) => x.point)
         .map(({ point, d }) => ({ lat: point.lat, lng: point.lng, title: (d.species && (d.species.commonName || d.species.name)) || "Detection", lines: [formatMoment(point.t), d.deploymentID, d.sensorType] })),
     );
-    toast(`${plural(detections.length, "detection")} within ${Math.round(Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius())) / 1000)} km of the map centre in the last ${DETECTION_DAYS} days`);
+    toast(`${plural(detections.length, "detection")} within ${Math.round(radius / 1000)} km of the map centre in the last ${DETECTION_DAYS} days`);
   } catch (error) {
     $("mapDetections").checked = false;
     const text = explain(error);
@@ -269,24 +336,37 @@ async function reload(force = false) {
     return;
   }
   const problem = listError();
-  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length ? "" : canListSensors() ? "" : "Your account cannot list the deployed sensors (that needs the herd-manager role). Open Layers and add a sensor by its ID.", problem ? "warn" : "");
+  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length || canListSensors() ? "" : "Your account cannot list the deployed sensors (that needs the herd-manager role). Add a sensor by its ID on the Sensors page.", problem ? "warn" : "");
   redraw();
   locateTheRest();
 }
 
 function wire() {
-  const basemap = $("mapBasemap");
-  basemap.replaceChildren(...Object.entries(BASEMAPS).map(([key, value]) => el("option", { value: key, text: value.label })));
-  basemap.value = loadBasemap();
-  basemap.addEventListener("change", () => map.setBasemap(basemap.value));
+  drawBasemapMenu();
+  drawTerrain();
+  $("mapBasemapButton").addEventListener("click", () => openBasemapMenu($("mapBasemapMenu").hidden));
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".tool-menu")) openBasemapMenu(false);
+  });
+  $("mapTerrain").addEventListener("click", () => {
+    map.setTerrain(!map.terrain);
+    drawTerrain();
+  });
+  $("mapMeasure").addEventListener("click", () => setMeasuring(!map.measuring));
+  $("measureClose").addEventListener("click", () => setMeasuring(false));
+  $("measureClear").addEventListener("click", () => {
+    measure = [];
+    drawMeasure();
+  });
+  $("measureUndo").addEventListener("click", () => {
+    measure = measure.slice(0, -1);
+    drawMeasure();
+  });
 
-  const panel = $("layerPanel");
-  const togglePanel = (open) => {
-    panel.hidden = !open;
-    $("mapLayersButton").setAttribute("aria-expanded", String(open));
-  };
-  $("mapLayersButton").addEventListener("click", () => togglePanel(panel.hidden));
-  $("layerClose").addEventListener("click", () => togglePanel(false));
+  $("mapLayersButton").addEventListener("click", () => showCard("layerPanel", $("layerPanel").hidden));
+  $("layerClose").addEventListener("click", () => showCard("layerPanel", false));
+  $("mapTracksButton").addEventListener("click", () => showCard("tracksCard", $("tracksCard").hidden));
+  $("tracksClose").addEventListener("click", () => showCard("tracksCard", false));
   $("layerSearch").addEventListener("input", drawLayerList);
   $("layerShowAll").addEventListener("click", () => {
     hidden.clear();
@@ -308,41 +388,36 @@ function wire() {
     map.setDetections([]);
     redraw();
   });
-  $("layerAddForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const id = $("layerAddInput").value.trim();
-    if (id.length < 2) return;
-    addSensor(id);
-    $("layerAddInput").value = "";
-    await reload();
-    select(id, true);
-  });
   $("mapTrackHours").addEventListener("change", redraw);
-  document.addEventListener("themechange", drawLayerList); // the track buttons follow the theme
   $("mapClearTracks").addEventListener("click", () => {
     tracks.clear();
     redraw();
   });
   $("mapDetections").addEventListener("change", loadDetections);
+  document.addEventListener("themechange", drawLayerList); // the track buttons follow the theme
 }
 
 /** Shows the page; `?sensor=ID` selects a sensor and `&track=1` draws its track. */
 export async function show({ query }) {
   if (!map) {
-    map = new LiveMap($("liveMap"), { onSensor: (id) => select(id), onNothing: () => select(""), describePoint: (track, point) => [track.name, pointLines(point)] });
-    wire();
+    map = new LiveMap($("liveMap"), {
+      onSensor: (id) => select(id),
+      onNothing: () => select(""),
+      describePoint: (track, point) => [track.name, pointLines(point)],
+      onMeasure: (place) => {
+        measure = [...measure, place];
+        drawMeasure();
+      },
+    });
+    if (map.map) wire();
   }
   if (!map.map) return;
   await reload();
-  if (query.sensor) {
-    if (!sensorById(query.sensor)) {
-      addSensor(query.sensor);
-      await reload();
-    }
+  if (query.sensor && sensorById(query.sensor)) {
     await select(query.sensor, true);
     if (query.track) await toggleTrack(query.sensor, true);
-    history.replaceState(null, "", buildHash("map"));
   }
+  if (query.sensor) history.replaceState(null, "", buildHash("map"));
 }
 
 /** Forgets what belongs to the account that signed out. */
@@ -352,12 +427,11 @@ export function reset() {
   selected = "";
   fitted = false;
   if (!map || !map.map) return;
+  setMeasuring(false);
   map.setSelected("");
   map.setSensors([]);
   map.setTracks([]);
   map.setDetections([]);
-  $("objectPanel").hidden = true;
-  $("layerPanel").hidden = true;
+  for (const id of ["objectPanel", "layerPanel", "tracksCard"]) $(id).hidden = true;
   $("mapDetections").checked = false;
-  $("layerDetections").hidden = false;
 }

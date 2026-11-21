@@ -4,6 +4,25 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.3.0 - 2026-11-21
+
+### Added
+
+- Base maps Satellite, Aerial photo of the Netherlands and Topographic, and 3D terrain. None needs a key.
+- A measuring tool on the live map.
+- Detections can be explored: search the map view area by area, with the places of the detectors remembered for the next visit; filters for species and detector, detections per day and counts per species.
+
+### Changed
+
+- The live map places its controls as Protect does: Layers top left, the base map, terrain, measure and tracks as square buttons top right, zoom and locate bottom right, and the panels in a column beside the tools.
+- The sensor panel on the map has icon buttons only.
+- The track length moved to a Tracks card behind the tracks button.
+
+### Removed
+
+- Adding a sensor from the layers panel of the map. Sensors are added on the Sensors page.
+- The form with latitude, longitude and radius on the detections page.
+
 ## 2.2.0 - 2026-11-21
 
 ### Added

@@ -109,13 +109,31 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-map-hidden` | `localStorage` | The sensors hidden on the live map |
 | `wnl-basemap` | `localStorage` | The chosen base map |
 | `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
+| `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
+| `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
 
 ## Map
 
 `map.js` has two classes on a shared base. `MapView` draws the points of one page with an optional track. `LiveMap` draws a marker per sensor, a coloured line and points per track, and the detections; it tells the page about clicks through callbacks. Markers are made the way Protect makes them (`markerImage`): a white disc with a green ring and the species icon, blue with a halo when selected, a rounded square for a sensor without an animal. The sensor source is clustered with Protect's values (radius 28 px, up to zoom 14), so markers that would overlap become one disc with a count. `MapView` can also draw a search circle and report clicks beside its points, which the detections page uses. Both take their data as plain lists and rebuild their GeoJSON sources in `sources()`, so after a style change (`style.load`) the same data is drawn again.
 
-The base maps are OpenFreeMap's `positron`, `liberty`, `bright` and `fiord`, the same as in Protect and without an API key. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves. A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for the night map.
+`BASEMAPS` holds the base maps. Four are OpenFreeMap vector styles (`positron`, `liberty`, `bright`, `fiord`), the same as in Protect. Three are picture tiles wrapped in a small style by `rasterStyle`: Esri World Imagery, the PDOK aerial photo of the Netherlands and OpenTopoMap. None needs a key, which is why they replace Protect's MapTiler satellite layer. `dark: true` marks a ground that needs light labels and the lighter track colours. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves, also on the picture maps.
+
+3D terrain (`setTerrain`, `applyTerrain`) uses the open Terrain Tiles on AWS in the `terrarium` encoding, again without a key: a hillshade layer under the data and MapLibre's terrain with Protect's exaggeration (1.3) and pitch (55). The choice is stored under `wnl-terrain`. A style change drops sources and layers, so terrain and data are applied again on `style.load`.
+
+The live map page (`pages/map.js`) places its controls as Protect does: the Layers button top left, the tools as square buttons top right (`.map-tools`), MapLibre's zoom, north and locate bottom right, and the panels in one column beside the tools (`.map-cards`), where the layers panel shrinks so the selected sensor always fits under it. On a phone the column rises from the bottom. Measuring is a mode of `LiveMap`: while it is on, a click adds a point to a dashed line and the page adds up the legs.
+
+A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for a dark ground.
+
+## Detections
+
+`GET /detections/` needs a centre and a radius of at most 10 km, and the API has no list of detectors. `pages/detections.js` therefore searches an area circle by circle:
+
+- `circleGrid` in `lib.js` gives the centres of a honeycomb of 10 km circles that covers the map view. More than 300 circles are refused with a hint to zoom in.
+- `searchCircle` spaces the requests 700 ms apart, about 85 a minute, under the API's default of 120 requests a minute per token (`RATE_LIMIT_MAX_REQUESTS` in the API's source). A `429` answer is waited out for 20 seconds and tried again.
+- Every place with a detection is kept in `localStorage` under `wnl-detection-places:{server}`, rounded to about 100 metres. `coverPlaces` turns those places into the fewest circles, and that is all the page asks when it opens or the period changes.
+
+The filters (species, detector) work on what is loaded; `countPerDay` makes the series of the chart.
 
 MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
 

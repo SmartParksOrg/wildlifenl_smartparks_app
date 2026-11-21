@@ -413,3 +413,51 @@ export function databaseModel(openapi) {
   tables.sort((a, b) => a.group - b.group || rank(a.name) - rank(b.name));
   return { groups, tables, links };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Detections: WildlifeNL answers within a circle around a point, so an area is searched
+// circle by circle
+
+const METRES_PER_DEGREE = 111320;
+
+/** The centres of circles of `radius` metres that together cover the box
+ * `{south, west, north, east}`: a honeycomb, the pattern that needs the fewest circles. */
+export function circleGrid(box, radius) {
+  const rowStep = (1.5 * radius) / METRES_PER_DEGREE;
+  const centres = [];
+  let row = 0;
+  for (let lat = box.south; lat < box.north + rowStep; lat += rowStep, row++) {
+    const colStep = (Math.sqrt(3) * radius) / (METRES_PER_DEGREE * Math.cos((Math.min(Math.abs(lat), 85) * Math.PI) / 180));
+    for (let lng = box.west + (row % 2 ? colStep / 2 : 0); lng < box.east + colStep; lng += colStep) centres.push({ lat, lng });
+  }
+  return centres;
+}
+
+/** The fewest searches that reach every known place: a place within `radius` metres of an
+ * earlier centre needs no search of its own. */
+export function coverPlaces(places, radius) {
+  const centres = [];
+  for (const place of places) if (!centres.some((centre) => distanceMeters(centre, place) <= radius)) centres.push({ lat: place.lat, lng: place.lng });
+  return centres;
+}
+
+/** `[start of the day, count]` pairs for a list of moments, in the browser's time zone, with
+ * the empty days between the first and the last filled in. */
+export function countPerDay(times) {
+  const counts = new Map();
+  for (const t of times) {
+    if (!Number.isFinite(t)) continue;
+    const day = new Date(t);
+    day.setHours(0, 0, 0, 0);
+    counts.set(day.getTime(), (counts.get(day.getTime()) || 0) + 1);
+  }
+  if (!counts.size) return [];
+  const days = [...counts.keys()].sort((a, b) => a - b);
+  const series = [];
+  const day = new Date(days[0]);
+  while (day.getTime() <= days[days.length - 1]) {
+    series.push([day.getTime(), counts.get(day.getTime()) || 0]);
+    day.setDate(day.getDate() + 1);
+  }
+  return series;
+}

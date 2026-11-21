@@ -16,7 +16,7 @@ The pages follow the structure of Smart Parks Protect: a live map, a list with a
 | Sensors | Every sensor with its animal, last reading, last position and number of readings | The same |
 | Sensor page | Everything WildlifeNL holds for one sensor: facts, latest values, the track, charts and every reading | The same |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per sensor | The same |
-| Detections | Camera trap and other detections in a period and a circle of at most 10 km; click the map to move the circle | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
+| Detections | What camera traps and other detectors saw, per place, species and day, found by searching the map area by area | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Database | What WildlifeNL stores and how it hangs together, as a drawing with a plain explanation per kind of record | Any account |
 | Account | Your profile, your roles and what they allow | Any account |
 | About | What the app is, with links | Any account |
@@ -27,15 +27,29 @@ The frame is the one of Protect: a top bar with the search (Ctrl K finds a senso
 
 ### Where the sensors come from
 
-WildlifeNL lets only `herd-manager` accounts list the deployed sensors. Those accounts see all active deployments, with the animal each sensor is on. Every account can also add a sensor by its ID, on the Sensors page or in the layers panel of the map; added sensors are remembered in the browser. For a Protect device the ID is what its integration sends: by default the device's primary identity (DevEUI, IMEI or serial), see `sensor_id_source` in the integration's settings. WildlifeNL keeps readings even before a herd manager has registered the sensor.
+WildlifeNL lets only `herd-manager` accounts list the deployed sensors. Those accounts see all active deployments, with the animal each sensor is on. Every account can also add a sensor by its ID on the Sensors page; added sensors are remembered in the browser. For a Protect device the ID is what its integration sends: by default the device's primary identity (DevEUI, IMEI or serial), see `sensor_id_source` in the integration's settings. WildlifeNL keeps readings even before a herd manager has registered the sensor.
 
 ### Live map
 
-- **Base map:** Light, Streets, Bright or Night; the default follows the theme.
+The map is laid out like the live map of Protect.
+
+- **Layers** (top left) opens the list of sensors: tick one to show or hide it, search by name or ID, draw its track with the route button and go to it with the target button. Detections of the last 7 days around the map centre can be switched on there too.
+- **Tools** (top right, square buttons): the base map, 3D terrain, measuring a distance, and the tracks with their length (24 hours to everything) once a track is on. Up to eight tracks at a time, each in its own colour.
+- **Base maps:** Light, Streets, Bright and Night from OpenFreeMap, Satellite (Esri World Imagery), Aerial photo of the Netherlands (PDOK) and Topographic (OpenTopoMap). The default follows the theme. None needs a key.
+- **Zoom, north and your own position** are bottom right.
 - **Markers:** the icon of the species in a ring, a rounded square for a sensor without an animal. Sensors that would overlap become one disc with a number; click it to zoom in.
-- **Layers:** tick a sensor to show or hide it, search by name or ID, use the route button to draw its track and the target button to go to it. Up to eight tracks at a time, each in its own colour. The track length, 24 hours to everything, is in the bar above the map.
-- **Click a marker** for the sensor's panel: last seen, position, temperature, links to the sensor page and its data, and the track button.
+- **Click a marker** for the sensor's panel: last seen, position, temperature, and icon buttons for the track, centring the map, the sensor page and the data explorer.
 - **Click a track point** for the time and the values of that fix.
+
+### Detections
+
+WildlifeNL answers a detection query only within 10 km of a point, and has no list of detectors. The page works around that:
+
+- **Search this map view** asks circle by circle until the view is covered, at a pace that stays under the API's limit of 120 requests a minute. A view of 200 by 90 km takes about a minute. Stop ends it.
+- **Click the map** to search 10 km around one point.
+- **Places with detections are remembered** in the browser, per server. From then on the page opens with the detections of those places, which takes a request per detector area.
+- **Filters:** the period, the species and the detector. A click on a species bar shows only that species.
+- **Shown:** a point per detector on the map, detections per day, the species with their counts, and every detection in the table.
 
 ### Data explorer
 
@@ -78,4 +92,4 @@ Run the tests with `npm test` (Node 20 or newer, nothing to install).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The Smart Parks logo and the photographs under `assets/img/` belong to Smart Parks and are not covered by the MIT license. The marker icons under `assets/img/icons/` are EarthRanger's, under the Apache License 2.0; see the README in that folder.
+MIT, see [LICENSE](LICENSE). The Smart Parks logo and the photographs under `assets/img/` belong to Smart Parks and are not covered by the MIT license. The marker icons under `assets/img/icons/` are EarthRanger's, under the Apache License 2.0; see the README in that folder. Map data and imagery belong to their providers, named in the corner of each map.
