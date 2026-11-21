@@ -4,11 +4,14 @@
 //
 // WildlifeNL keeps every position that is sent, and answers with what is near: the animals,
 // detections and reports within a few hundred metres, and a message when an experiment has
-// one for this place. Those go to the modules the live map draws from.
+// one for this place. That is how an account without a role to read them gets to see what
+// is around. An account whose roles read a kind anyway finds it on the map already, so of
+// that kind nothing is added: it would only show the same things twice.
 
+import { SCOPES } from "./api.js";
 import { addFinds } from "./detections.js";
 import { addOwnReading } from "./people.js";
-import { account, explain } from "./session.js";
+import { account, explain, hasScope } from "./session.js";
 import { toast } from "./ui.js";
 
 const KEY = "wnl-share-location";
@@ -16,8 +19,17 @@ const KEY = "wnl-share-location";
 const EVERY_MS = 10 * 60 * 1000;
 const MESSAGE_MS = 12000;
 
-/** `animals` are the animals WildlifeNL found near the last position that was sent. */
+/** `animals` are the animals WildlifeNL found near the last position that was sent, for an
+ * account that cannot read animals otherwise. */
 export const sharing = { on: false, last: 0, message: "", animals: [] };
+
+/** What is near, of a kind the roles of the account do not read anyway. */
+const unlessRead = (scope, list) => (hasScope(scope) ? [] : list || []);
+
+/** Whether sharing shows this account anything on the map that its roles do not. */
+export function showsNearby() {
+  return [SCOPES.animalsNear, SCOPES.detections, SCOPES.reports].some((scope) => !hasScope(scope));
+}
 
 const listeners = new Set();
 let timer = null;
@@ -56,8 +68,9 @@ async function send() {
     const reading = await api.call("POST", "/tracking-reading/", { location: { latitude: coords.latitude, longitude: coords.longitude }, timestamp: new Date(Date.now() - 1000).toISOString() });
     sharing.last = Date.now();
     sharing.message = "";
-    sharing.animals = (reading && reading.animals) || [];
-    addFinds({ found: (reading && reading.detections) || [], reports: (reading && reading.interactions) || [] });
+    const near = reading || {};
+    sharing.animals = unlessRead(SCOPES.animalsNear, near.animals);
+    addFinds({ found: unlessRead(SCOPES.detections, near.detections), reports: unlessRead(SCOPES.reports, near.interactions) });
     if (reading) addOwnReading(reading);
     const message = reading && reading.conveyance && reading.conveyance.message;
     if (message && message.text) toast(message.name ? `${message.name}: ${message.text}` : message.text, false, MESSAGE_MS);

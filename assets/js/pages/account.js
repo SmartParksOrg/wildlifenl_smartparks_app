@@ -4,7 +4,7 @@ import { SCOPES } from "../api.js";
 import { operationLabel } from "../lib.js";
 import { loadApi, writeOperations } from "../rights.js";
 import { account, explain, hasScope, refreshProfile, signOut } from "../session.js";
-import { onSharing, setSharing, sharing } from "../sharing.js";
+import { onSharing, setSharing, sharing, showsNearby } from "../sharing.js";
 import { $, busy, el, facts, formatMoment, note, plural, toast } from "../ui.js";
 import { drawActions, inApp } from "../writes.js";
 
@@ -43,7 +43,10 @@ async function drawRights() {
 
 function drawSharing() {
   $("sharingSwitch").checked = sharing.on;
-  $("sharingStatus").textContent = !sharing.on ? sharing.message : sharing.last ? `Last sent ${formatMoment(sharing.last)}. Near you: ${plural(sharing.animals.length, "animal")}.` : sharing.message || "Looking for your position…";
+  // what sharing gives back depends on what the roles of the account read anyway
+  $("sharingReturn").textContent = showsNearby() ? "In return the live map shows what WildlifeNL finds near you, of the kinds your roles do not let you read: animals, detections or reports." : "Your roles already read the animals, detections and reports, so the map shows you nothing new in return.";
+  const near = hasScope(SCOPES.animalsNear) ? "" : ` Near you: ${plural(sharing.animals.length, "animal")}.`;
+  $("sharingStatus").textContent = !sharing.on ? sharing.message : sharing.last ? `Last sent ${formatMoment(sharing.last)}.${near}` : sharing.message || "Looking for your position…";
 }
 
 function draw() {

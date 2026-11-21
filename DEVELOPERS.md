@@ -84,6 +84,8 @@ On the live map people are a layer with a track per person, in the same track co
 
 The API answers with what is near that position: the animals, detections and reports within about 250 metres and 48 hours, and a conveyance when a running experiment has a message for the place. The detections and reports go to `detections.js` (`addFinds`), the position to the own track in `people.js` (`addOwnReading`), and the message is shown as a notice. The animals come without their sensor, so they cannot become animals of `store.js`; the live map shows them as events with an ID that starts with `n:`.
 
+What is near is only added for a kind the roles of the account do not read anyway (`unlessRead`): the animals without `SCOPES.animalsNear`, the detections without `SCOPES.detections`, the reports without `SCOPES.reports`. A manager who reads the animals has them on the map as animals, and the same ones again as "near you" would be double.
+
 Facts from the API's source: it refuses a timestamp that is not in its past, so the app sends the moment of a second ago; it keeps every position and overwrites the last known location of the user; and it does not look whether a message was sent before, so a person who stays near an animal can get the same message every 10 minutes.
 
 The app has no Bluetooth. The phone apps start a contact (`POST /contact/`) when they hear a collar. A web page cannot scan for devices without a browser flag, a collar only advertises the last three bytes of its address where the API wants six, and connecting to a collar to ask for it is ruled out on purpose.

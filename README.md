@@ -101,7 +101,7 @@ An experiment is upcoming until its start, live until its end, and ended after t
 
 On the Account page you can switch on "Share my location". It is off until you do, and the choice holds for your account on that device only. While it is on and the app is open on your screen, the app sends your position to WildlifeNL at once and then every 10 minutes, as the WildlifeNL phone apps do. A browser gives no position to a page in the background, so sharing pauses when the phone locks or you look at another tab. A chip in the top bar shows that sharing is on.
 
-WildlifeNL keeps every position. Researchers can see where you were, and a running experiment can send you a message when you are near an animal. In return the live map shows what WildlifeNL finds near you: animals and reports under Events, camera traps under Detectors, and your own track under People.
+WildlifeNL keeps every position. Researchers can see where you were, and a running experiment can send you a message when you are near an animal. In return the live map shows what WildlifeNL finds near you, of the kinds your roles do not let you read: animals and reports under Events, camera traps under Detectors. An account whose roles read a kind anyway, such as a wildlife manager with the animals, finds it on the map already and gets nothing added of that kind. Your own track is under People.
 
 ### Questions about a report
 

@@ -17,7 +17,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 - Research: the list of experiments shows whether each is upcoming, live or ended, with its counts. The page of an experiment says what it still misses before it starts. A questionnaire has a page with its questions in order, their answer options and jumps, and can be copied to another experiment.
 - The lists under a record, such as the responses of an experiment, can be filtered, copied as JSON and downloaded as CSV.
 - "Search this area" in the panel of a living lab on the live map.
-- Share my location, on the Account page: off until you switch it on, then your position goes to WildlifeNL every 10 minutes while the app is open on screen, as the phone apps do. The live map shows the animals, detections and reports WildlifeNL finds near you, and a message of an experiment is shown as a notice.
+- Share my location, on the Account page: off until you switch it on, then your position goes to WildlifeNL every 10 minutes while the app is open on screen, as the phone apps do. The live map shows what WildlifeNL finds near you, of the kinds your roles do not let you read anyway: animals, detections or reports. A message of an experiment is shown as a notice.
 - After a report the app asks the questions a running experiment has about it, and sends the answers. You can stop halfway and go on later from the page of the report.
 - Your own reports are on the live map, under Events, for every account.
 - An area manager or wildlife manager finds the animals in an area with "Search this view" on the live map. Found animals are remembered and have a page, a track and charts like the animals a herd manager lists.
