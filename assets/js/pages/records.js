@@ -4,7 +4,7 @@
 
 import { buildHash, toTime, webLink, words } from "../lib.js";
 import { MapView } from "../map.js";
-import { TYPES, canList, getRecord, linkOf, listRecords, recordHash, relatedRecords, titleOf } from "../records.js";
+import { TYPES, canList, getRecord, linkOf, listHash, listRecords, listTitle, recordHash, seesOwnOnly, relatedRecords, titleOf } from "../records.js";
 import { explain, hasScope } from "../session.js";
 import { $, DataTable, el, facts, formatMoment, note, plural, toast } from "../ui.js";
 import { drawActions } from "../writes.js";
@@ -100,27 +100,32 @@ function columnsOf(records) {
 // ---------------------------------------------------------------------------------------------
 // A list
 
-async function showList(type) {
+async function showList(type, own) {
   const def = TYPES[type];
   const mine = ++run;
-  $("recordsTitle").textContent = def.plural;
+  const name = def.plural.toLowerCase();
+  $("recordsTitle").textContent = listTitle(type, own);
   $("recordsDescription").textContent = def.description;
   note($("recordsNote"), "");
+  // from the own records to those of everyone and back, for an account that may read both
+  const both = Boolean(def.mine) && hasScope(def.needs || []);
+  $("recordsSwitch").hidden = !both;
+  $("recordsSwitch").textContent = own ? `All ${name}` : listTitle(type, true);
+  $("recordsSwitch").href = recordHash(type) + (own ? "" : "?mine=1");
   // what the account may add here; a new record opens on its own page
-  drawActions($("recordsActions"), type, "list", null, (result) => (result && result.ID != null ? (location.hash = recordHash(type, result.ID)) : showList(type)));
+  drawActions($("recordsActions"), type, "list", null, (result) => (result && result.ID != null ? (location.hash = recordHash(type, result.ID)) : showList(type, own)));
   if (!listTable) listTable = new DataTable($("recordsTable"), { filename: "wildlifenl" });
   listTable.filename = `wildlifenl-${type}`;
   listTable.setRows([], { empty: "Loading…" });
   try {
-    const { records, own } = await listRecords(type);
+    const { records, own: partly } = await listRecords(type, own);
     if (mine !== run) return;
     const { rows, options } = tableOf(type, records, def.columns);
-    listTable.setRows(rows, { ...options, empty: `No ${def.plural.toLowerCase()} to show.` });
+    listTable.setRows(rows, { ...options, empty: `No ${name} to show.` });
     const needs = def.needs && def.needs.length && !hasScope(def.needs);
-    note(
-      $("recordsNote"),
-      [own && type === "people" ? def.hint : own ? `You see your own ${def.plural.toLowerCase()}. All of them need one of these roles: ${def.needs.join(", ")}.` : needs && !def.list ? `The list of ${def.plural.toLowerCase()} needs one of these roles: ${def.needs.join(", ")}. Records you opened through a link are listed.` : "", !records.length || def.list ? def.hint || "" : ""].filter((text, index, all) => text && all.indexOf(text) === index).join(" "),
-    );
+    // a list that was asked for as the own one needs no word on what the account misses
+    const about = own && def.mine ? "" : partly && type === "people" ? def.hint : partly ? `You see your own ${name}. All of them need one of these roles: ${def.needs.join(", ")}.` : needs && !def.list ? `The list of ${name} needs one of these roles: ${def.needs.join(", ")}. Records you opened through a link are listed.` : "";
+    note($("recordsNote"), [about, !(own && def.mine) && (!records.length || def.list) ? def.hint || "" : ""].filter((text, index, all) => text && all.indexOf(text) === index).join(" "));
   } catch (error) {
     const text = explain(error);
     if (text && mine === run) note($("recordsNote"), text, "error");
@@ -158,8 +163,8 @@ async function showRecord(type, id) {
   const extra = $("recordExtra");
   $("recordTitle").textContent = def.label;
   $("recordSubtitle").textContent = "";
-  $("recordBack").href = recordHash(type);
-  $("recordBack").textContent = `All ${def.plural.toLowerCase()}`;
+  $("recordBack").href = listHash(type);
+  $("recordBack").textContent = def.own || seesOwnOnly(type) ? listTitle(type, true) : `All ${def.plural.toLowerCase()}`;
   $("recordOnMap").hidden = true;
   $("recordMapCard").hidden = true;
   $("recordFacts").replaceChildren();
@@ -184,7 +189,7 @@ async function showRecord(type, id) {
   // what the account may change; afterwards the page is read again, or left when the record is gone
   drawActions($("recordActions"), type, "record", record, (result, action) => {
     if (!action.gone) return showRecord(type, id);
-    if (canList(type)) location.hash = recordHash(type);
+    if (canList(type)) location.hash = listHash(type);
     else history.back();
   });
   $("recordCopy").onclick = async () => {
@@ -250,12 +255,12 @@ async function showRecord(type, id) {
 }
 
 /** Shows the list of a kind, or one record of it; an unknown kind goes to the species. */
-export async function show({ id: type, sub }) {
+export async function show({ id: type, sub, query }) {
   const known = type in TYPES ? type : "species";
   $("view-records").hidden = Boolean(sub);
   $("view-record").hidden = !sub;
   if (sub) await showRecord(known, sub);
-  else await showList(known);
+  else await showList(known, Boolean(query.mine && TYPES[known].mine));
 }
 
 export function reset() {

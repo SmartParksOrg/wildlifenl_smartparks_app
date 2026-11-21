@@ -63,6 +63,8 @@ const research = (path) => ({ needs: SCOPES.research, load: (record) => account.
  * - `table` is the name in the API, `nav` the entry of the navigation it belongs under.
  * - `needs` are the roles for the list (none: every account); `ownOnly` says a `list` gives
  *   an account without them only its own records.
+ * - `mine` is where the account's own records are read, for the list `?mine=1`; `own` says
+ *   the list holds nothing but the account's own.
  * - `get` reads one record in full, `getNeeds` are its roles.
  * - `columns` are the fields of the list, `title` the name of one record.
  * - `related` are lists that hang under one record, each with its type and loader.
@@ -94,6 +96,7 @@ export const TYPES = {
     table: "Zone",
     label: "Zone",
     plural: "Zones",
+    own: true,
     nav: "zones",
     description: "The areas you drew to be warned about certain species",
     path: "/zones/me/",
@@ -107,6 +110,9 @@ export const TYPES = {
     nav: "reports",
     description: "What people reported: a sighting, damage or a collision with an animal",
     list: reports,
+    needs: SCOPES.reports,
+    ownOnly: true,
+    mine: "/interactions/me/",
     get: (id) => `/interaction/${id}`,
     getNeeds: SCOPES.report,
     columns: ["moment", "type", "species", "notes", "user", "place"],
@@ -117,7 +123,7 @@ export const TYPES = {
     table: "InteractionType",
     label: "Report type",
     plural: "Report types",
-    nav: "reports",
+    nav: "report-types",
     description: "The kinds of reports people can make",
     path: "/interactionTypes/",
     columns: ["name", "description"],
@@ -131,6 +137,7 @@ export const TYPES = {
     list: fromPeople(() => people.alarms),
     needs: SCOPES.alarms,
     ownOnly: true,
+    mine: "/alarms/me/",
     columns: ["timestamp", "zone", "animal", "detection", "interaction", "conveyances"],
     title: (record) => `Alarm in ${(record.zone && record.zone.name) || "a zone"}`,
   },
@@ -142,6 +149,7 @@ export const TYPES = {
     description: "The studies, each in a living lab, with their questionnaires and messages",
     path: "/experiments/",
     needs: SCOPES.research,
+    mine: "/experiments/me/",
     get: (id) => `/experiment/${id}`,
     getNeeds: SCOPES.research,
     columns: ["name", "livingLab", "start", "end", "user"],
@@ -168,7 +176,7 @@ export const TYPES = {
   questions: { table: "Question", label: "Question", plural: "Questions", nav: "experiments", description: "One question of a questionnaire", get: (id) => `/question/${id}`, columns: ["index", "text", "description"], title: (record) => record.text || "Question" },
   answers: { table: "Answer", label: "Answer option", plural: "Answer options", nav: "experiments", description: "One answer a person can pick", get: (id) => `/answer/${id}`, columns: ["index", "text"], title: (record) => record.text || "Answer" },
   messages: { table: "Message", label: "Message", plural: "Messages", nav: "experiments", description: "A text of an experiment that is shown to people", get: (id) => `/message/${id}`, columns: ["name", "severity", "species", "text"] },
-  responses: { table: "Response", label: "Response", plural: "Responses", nav: "experiments", description: "What you answered to questions", path: "/responses/me/", columns: ["timestamp", "question", "answer", "text"], title: (record) => record.text || (record.answer && record.answer.text) || "Response" },
+  responses: { table: "Response", label: "Answer you gave", plural: "Answers", own: true, nav: "responses", description: "What you answered to the questions that followed a report", path: "/responses/me/", columns: ["timestamp", "question", "answer", "text"], title: (record) => record.text || (record.answer && record.answer.text) || "Response" },
   conveyances: {
     table: "Conveyance",
     label: "Sent message",
@@ -178,6 +186,7 @@ export const TYPES = {
     list: fromPeople(() => people.conveyances),
     needs: SCOPES.research,
     ownOnly: true,
+    mine: "/conveyances/me/",
     columns: ["timestamp", "user", "message", "alarm", "animal", "response"],
     title: (record) => (record.message && (record.message.name || record.message.text)) || "Sent message",
   },
@@ -226,7 +235,7 @@ export const TYPES = {
     ],
     hint: "Only administrators see every account and every profile. Others see their own profile and the names of the people in the data they may read.",
   },
-  roles: { table: "Role", label: "Role", plural: "Roles", nav: "people", description: "What an account may do", path: "/roles/", columns: ["name"] },
+  roles: { table: "Role", label: "Role", plural: "Roles", nav: "roles", description: "What an account may do", path: "/roles/", columns: ["name"] },
 };
 
 /** Which kind of record a field holds, by the name of the field in the API. */
@@ -315,16 +324,35 @@ export function canList(type) {
   return Boolean(def.list || (def.path && hasScope(def.needs || [])));
 }
 
-/** The records of a kind and whether the account sees only its own. */
-export async function listRecords(type) {
+/** The name of a list: of every record of a kind, or of the account's own. */
+export function listTitle(type, mine = false) {
+  const { plural, own } = TYPES[type];
+  return mine || own ? `My ${plural.toLowerCase()}` : plural;
+}
+
+/** Whether the account reads its own records of a kind and not those of everyone. */
+export function seesOwnOnly(type) {
+  const def = TYPES[type];
+  return Boolean(def.mine) && !hasScope(def.needs || []);
+}
+
+/** The address of the list a record belongs to. */
+export function listHash(type) {
+  return recordHash(type) + (seesOwnOnly(type) ? "?mine=1" : "");
+}
+
+/** The records of a kind and whether the account sees only its own; `mine` asks for the
+ * own ones where the kind has a list of them. */
+export async function listRecords(type, mine = false) {
   const def = TYPES[type];
   const all = hasScope(def.needs || []);
   let records;
-  if (def.list) records = await def.list();
+  if (mine && def.mine) records = await account.api.list(def.mine);
+  else if (def.list) records = await def.list();
   else if (def.path && all) records = await account.api.list(def.path);
   else records = [...seen.entries()].filter(([key]) => key.startsWith(`${type}|`)).map(([, record]) => record);
   for (const record of records) keep(type, record);
-  return { records, own: Boolean(def.ownOnly && !all) };
+  return { records, own: Boolean((mine && def.mine) || (def.ownOnly && !all)) };
 }
 
 /** One record: read in full when the account may, else what was seen of it elsewhere. */
@@ -338,7 +366,7 @@ export async function getRecord(type, id) {
     } catch (error) {
       if (error.status === 401 || !known) throw error;
     }
-  } else if (!known && (def.list || def.path || def.mine)) {
+  } else if (!known && (def.list || def.path)) {
     await listRecords(type);
   }
   return seen.get(`${type}|${id}`) || null;

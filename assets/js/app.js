@@ -1,7 +1,7 @@
 // The frame of the app: sign-in, the navigation and which page is shown. Each page lives in
 // pages/ and exports `show(route)` and `reset()`.
 
-import { APP_NAME, ApiError, SERVERS, WildlifeNlClient } from "./api.js";
+import { APP_NAME, ApiError, SCOPES, SERVERS, WildlifeNlClient } from "./api.js";
 import { buildHash, parseHash } from "./lib.js";
 import * as aboutPage from "./pages/about.js";
 import * as accountPage from "./pages/account.js";
@@ -12,11 +12,11 @@ import * as mapPage from "./pages/map.js";
 import * as recordsPage from "./pages/records.js";
 import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
-import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
+import { account, explain, hasScope, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
 import { resetDetections } from "./detections.js";
 import { closeForm, wireForm } from "./form.js";
 import { resetPeople } from "./people.js";
-import { TYPES, canList, recordHash, resetRecords } from "./records.js";
+import { TYPES, canList, listTitle, recordHash, resetRecords } from "./records.js";
 import { resetRights } from "./rights.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
@@ -202,9 +202,11 @@ function route() {
   const single = { animals: "animal", sensors: "sensor" }[parsed.page];
   const key = single && parsed.id ? single : parsed.page in PAGES && !["animal", "sensor"].includes(parsed.page) ? parsed.page : "map";
   const page = PAGES[key];
-  // a record page belongs under the navigation entry of its kind
+  // a record page belongs under the navigation entry of its kind, and the list of the
+  // account's own records under the entry for those
   const type = key === "data" ? TYPES[parsed.id] || TYPES.species : null;
-  const nav = type ? type.nav : page.nav;
+  const mine = Boolean(type && type.mine && parsed.query.mine && !parsed.sub);
+  const nav = mine && document.querySelector(`.nav-item[data-view="my-${type.nav}"]`) ? `my-${type.nav}` : type ? type.nav : page.nav;
   for (const other of Object.values(PAGES)) $(`view-${other.view}`).hidden = other.view !== page.view;
   $("view-record").hidden = true; // the records page shows it for one record
   $("content").classList.toggle("bleed", key === "map");
@@ -215,7 +217,7 @@ function route() {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
-  document.title = `${key === "sensor" ? parsed.id : type ? type.plural : page.title} · ${APP_NAME}`;
+  document.title = `${key === "sensor" ? parsed.id : type ? listTitle(parsed.id in TYPES ? parsed.id : "species", mine) : page.title} · ${APP_NAME}`;
   Promise.resolve(page.module.show(parsed)).catch((error) => {
     const text = explain(error);
     if (text) toast(text, true);
@@ -226,8 +228,11 @@ function drawAccount() {
   const { session } = account;
   $("sidebarUser").textContent = session.email || "Account";
   const host = new URL(session.baseUrl).host;
-  // an entry of the navigation is only there when the account may read something behind it
-  for (const link of document.querySelectorAll(".nav-item[data-type]")) link.hidden = !canList(link.dataset.type);
+  // an entry of the navigation is only there when the roles of the account open it
+  for (const link of document.querySelectorAll(".nav .nav-item")) {
+    const { needs, not } = link.dataset;
+    link.hidden = Boolean((needs && !hasScope(SCOPES[needs])) || (not && hasScope(SCOPES[not])));
+  }
   for (const section of document.querySelectorAll(".nav-section")) section.hidden = ![...section.querySelectorAll(".nav-item")].some((link) => !link.hidden);
   const chip = $("serverChip");
   chip.textContent = host.startsWith("test-") ? "Test server" : host.startsWith("live-") ? "" : host;
@@ -300,10 +305,12 @@ function drawSearch() {
 
 async function openSearch() {
   if (!account.session || $("searchDialog").open) return;
-  const pages = Object.entries(PAGES)
-    .filter(([key]) => !["animal", "sensor", "data"].includes(key))
-    .map(([key, page]) => ({ label: page.title, sub: "Page", icon: "search", href: buildHash(key) }))
-    .concat(Object.entries(TYPES).filter(([type]) => canList(type)).map(([type, def]) => ({ label: def.plural, sub: "Page", icon: "search", href: recordHash(type) })));
+  // the pages: the entries of the navigation this account sees, then the other lists it may read
+  // (the entry of the account shows the email address, so it is named by its page)
+  const pages = [...document.querySelectorAll("a.nav-item")]
+    .filter((link) => !link.hidden)
+    .map((link) => ({ label: link.dataset.view === "account" ? PAGES.account.title : link.textContent.trim(), sub: "Page", icon: "search", href: link.getAttribute("href") }));
+  for (const [type, def] of Object.entries(TYPES)) if (canList(type) && !pages.some((item) => item.href === recordHash(type))) pages.push({ label: def.plural, sub: "Page", icon: "search", href: recordHash(type) });
   search.items = pages;
   search.active = 0;
   $("searchInput").value = "";

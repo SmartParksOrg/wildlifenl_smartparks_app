@@ -23,9 +23,10 @@ The pages follow the structure of Smart Parks Protect. An animal is what people 
 | Messages | The messages and alarms that were shown to people, with who got them and why |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per animal |
 | Database | What WildlifeNL stores and how it hangs together, with a link from each kind of record to its list in the app |
-| Living labs, Zones | The research areas with their boundary and visits, and the zones you drew |
+| My reports, My answers, My messages, My alarms, My zones | What is yours: the reports you made, what you answered, the messages you got, and the zones you drew with their alarms |
 | Experiments | The studies with their questionnaires, messages, responses and more |
-| Species | The species WildlifeNL knows |
+| Accounts, Roles, Report types | The people with an account and what each may do, for an administrator |
+| Species, Living labs | The species WildlifeNL knows, and the research areas with their boundary and visits |
 | Account, About | Your roles and what they allow you to read and to change; what the app is |
 
 Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The app has a light and a dark theme and works on a phone.
@@ -35,6 +36,19 @@ The frame is the one of Protect: a top bar with the search (Ctrl K finds an anim
 ### What your account sees
 
 WildlifeNL decides per role what an account may read, and the navigation only shows what yours may open. The Account page lists it.
+
+The navigation has a section per reason to come here:
+
+| Section | For | Holds |
+| --- | --- | --- |
+| Monitor | The roles that read the data of everyone | The live map, animals, sensors, detections, people, reports, contacts, alarms and messages |
+| Mine | Every account | Your own reports, answers and messages; with `land-user` or `wildlife-manager` also your zones and their alarms |
+| Research | `researcher` | Experiments |
+| Analyze | Any account, the data explorer with a role that reads readings | Data explorer and Database |
+| Admin | `administrator` | Accounts, roles, species, living labs and report types |
+| Reference | Everyone who is no administrator | Species and living labs, to read |
+
+A list that exists for everyone and for yourself, such as Reports and My reports, is one page with a button to go from one to the other.
 
 | To see | Role |
 | --- | --- |

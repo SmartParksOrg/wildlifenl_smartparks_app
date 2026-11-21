@@ -84,7 +84,15 @@ On the live map people are a layer with a track per person, in the same track co
 
 Links come from two places. `FIELD_TYPES` says which kind of record a field holds by the field's name (`species`, `user`, `zone`, `questionnaire` and so on), and `linkOf` turns such a value into a link; it also knows that a `sensorID` leads to a sensor page, an animal to an animal page and a `deploymentID` to the detections of that detector. Every record that passes by is kept in memory (`keep`), so a record page can show what was seen of it elsewhere when the account may not read it directly.
 
-To add a kind of record: add it to `TYPES`, add the field names that point at it to `FIELD_TYPES`, and add it to `DATA_GROUPS` in `lib.js` so the Database page names it. A navigation entry with `data-type` is hidden when `canList` says the account can read nothing behind it.
+To add a kind of record: add it to `TYPES`, add the field names that point at it to `FIELD_TYPES`, and add it to `DATA_GROUPS` in `lib.js` so the Database page names it.
+
+A kind with a `mine` path also has a list of the account's own records at `#/data/{kind}?mine=1`, read from that path: My reports, My alarms, My messages and My experiments. A kind marked `own` only ever holds the account's own (zones, answers), so its list is named "My ..." without a second address.
+
+## Navigation
+
+The navigation in `index.html` has a section per audience: Monitor, Mine, Research, Analyze, Admin and Reference. One rule decides who sees an entry: it shows when the account has one of the roles under `data-needs` and none of those under `data-not`. Both name a key of `SCOPES` in `api.js`; an entry without either is for every account. `drawAccount` in `app.js` applies the rule and leaves out a section without entries. A page that sits in two sections (Species under Admin and under Reference, the people under Admin and under Monitor) is shown in one of them through `data-not`.
+
+The search lists the entries the account sees, so it needs no list of its own.
 
 ## Changing things
 

@@ -55,7 +55,8 @@ async function request(url, { method = "GET", headers = {}, body } = {}) {
 }
 
 /** Roles that may call each read endpoint, from the API's OpenAPI document (version 20260826).
- * An empty list means every signed-in account. */
+ * An empty list means every signed-in account. The navigation in index.html names these keys
+ * to say who sees an entry. */
 export const SCOPES = {
   deployments: ["herd-manager"],
   readings: ["land-user", "nature-area-manager", "wildlife-manager", "herd-manager"],
@@ -64,10 +65,12 @@ export const SCOPES = {
   visits: ["nature-area-manager", "wildlife-manager", "herd-manager"],
   zones: ["land-user", "wildlife-manager"],
   animal: ["herd-manager"],
+  animalsNear: ["nature-area-manager", "wildlife-manager", "herd-manager"],
   report: ["wildlife-manager", "researcher"],
   research: ["researcher"],
   alarms: ["administrator", "researcher"],
   profiles: ["administrator"],
+  admin: ["administrator"], // the Admin section of the navigation
 };
 
 export class WildlifeNlClient {

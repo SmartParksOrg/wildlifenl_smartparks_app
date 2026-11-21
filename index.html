@@ -133,36 +133,51 @@
         <div class="sidebar-top">
           <button class="btn ghost icon" type="button" id="sidebarHide" aria-label="Hide navigation" title="Hide navigation"><svg class="icon lg"><use href="#i-panel-close" /></svg></button>
         </div>
+        <!-- An entry shows when the account has one of the roles under `data-needs`, a key of
+             SCOPES in api.js, and none of those under `data-not`; an entry without either
+             is for every account. A section without entries is left out. -->
         <nav class="nav" aria-label="Pages">
           <div class="nav-section">
             <div class="nav-label">Monitor</div>
             <a class="nav-item" href="#/map" data-view="map"><svg class="icon"><use href="#i-map" /></svg><span>Live map</span></a>
-            <a class="nav-item" href="#/animals" data-view="animals"><svg class="icon"><use href="#i-animal" /></svg><span>Animals</span></a>
-            <a class="nav-item" href="#/sensors" data-view="sensors"><svg class="icon"><use href="#i-sensor" /></svg><span>Sensors</span></a>
-            <a class="nav-item" href="#/data/people" data-view="people" data-type="people"><svg class="icon"><use href="#i-users" /></svg><span>People</span></a>
-            <a class="nav-item" href="#/detections" data-view="detections"><svg class="icon"><use href="#i-camera" /></svg><span>Detections</span></a>
-            <a class="nav-item" href="#/data/reports" data-view="reports" data-type="reports"><svg class="icon"><use href="#i-flag" /></svg><span>Reports</span></a>
-            <a class="nav-item" href="#/data/contacts" data-view="contacts" data-type="contacts"><svg class="icon"><use href="#i-contact" /></svg><span>Contacts</span></a>
-            <a class="nav-item" href="#/data/alarms" data-view="alarms" data-type="alarms"><svg class="icon"><use href="#i-bell" /></svg><span>Alarms</span></a>
-            <a class="nav-item" href="#/data/conveyances" data-view="conveyances" data-type="conveyances"><svg class="icon"><use href="#i-message" /></svg><span>Messages</span></a>
+            <a class="nav-item" href="#/animals" data-view="animals" data-needs="animalsNear"><svg class="icon"><use href="#i-animal" /></svg><span>Animals</span></a>
+            <a class="nav-item" href="#/sensors" data-view="sensors" data-needs="readings"><svg class="icon"><use href="#i-sensor" /></svg><span>Sensors</span></a>
+            <a class="nav-item" href="#/detections" data-view="detections" data-needs="detections"><svg class="icon"><use href="#i-camera" /></svg><span>Detections</span></a>
+            <a class="nav-item" href="#/data/people" data-view="people" data-needs="research" data-not="admin"><svg class="icon"><use href="#i-users" /></svg><span>People</span></a>
+            <a class="nav-item" href="#/data/reports" data-view="reports" data-needs="reports"><svg class="icon"><use href="#i-flag" /></svg><span>Reports</span></a>
+            <a class="nav-item" href="#/data/contacts" data-view="contacts" data-needs="research"><svg class="icon"><use href="#i-contact" /></svg><span>Contacts</span></a>
+            <a class="nav-item" href="#/data/alarms" data-view="alarms" data-needs="alarms"><svg class="icon"><use href="#i-bell" /></svg><span>Alarms</span></a>
+            <a class="nav-item" href="#/data/conveyances" data-view="conveyances" data-needs="research"><svg class="icon"><use href="#i-message" /></svg><span>Messages</span></a>
           </div>
           <div class="nav-section">
-            <div class="nav-label">Analyze</div>
-            <a class="nav-item" href="#/explore" data-view="explore"><svg class="icon"><use href="#i-chart" /></svg><span>Data explorer</span></a>
-            <a class="nav-item" href="#/database" data-view="database"><svg class="icon"><use href="#i-database" /></svg><span>Database</span></a>
-          </div>
-          <div class="nav-section">
-            <div class="nav-label">Areas</div>
-            <a class="nav-item" href="#/data/livinglabs" data-view="livinglabs" data-type="livinglabs"><svg class="icon"><use href="#i-area" /></svg><span>Living labs</span></a>
-            <a class="nav-item" href="#/data/zones" data-view="zones" data-type="zones"><svg class="icon"><use href="#i-zone" /></svg><span>Zones</span></a>
+            <div class="nav-label">Mine</div>
+            <a class="nav-item" href="#/data/reports?mine=1" data-view="my-reports"><svg class="icon"><use href="#i-flag" /></svg><span>My reports</span></a>
+            <a class="nav-item" href="#/data/responses" data-view="responses"><svg class="icon"><use href="#i-list" /></svg><span>My answers</span></a>
+            <a class="nav-item" href="#/data/conveyances?mine=1" data-view="my-conveyances"><svg class="icon"><use href="#i-message" /></svg><span>My messages</span></a>
+            <a class="nav-item" href="#/data/alarms?mine=1" data-view="my-alarms" data-needs="zones"><svg class="icon"><use href="#i-bell" /></svg><span>My alarms</span></a>
+            <a class="nav-item" href="#/data/zones" data-view="zones" data-needs="zones"><svg class="icon"><use href="#i-zone" /></svg><span>My zones</span></a>
           </div>
           <div class="nav-section">
             <div class="nav-label">Research</div>
-            <a class="nav-item" href="#/data/experiments" data-view="experiments" data-type="experiments"><svg class="icon"><use href="#i-flask" /></svg><span>Experiments</span></a>
+            <a class="nav-item" href="#/data/experiments" data-view="experiments" data-needs="research"><svg class="icon"><use href="#i-flask" /></svg><span>Experiments</span></a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-label">Analyze</div>
+            <a class="nav-item" href="#/explore" data-view="explore" data-needs="readings"><svg class="icon"><use href="#i-chart" /></svg><span>Data explorer</span></a>
+            <a class="nav-item" href="#/database" data-view="database"><svg class="icon"><use href="#i-database" /></svg><span>Database</span></a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-label">Admin</div>
+            <a class="nav-item" href="#/data/people" data-view="people" data-needs="admin"><svg class="icon"><use href="#i-users" /></svg><span>Accounts</span></a>
+            <a class="nav-item" href="#/data/roles" data-view="roles" data-needs="admin"><svg class="icon"><use href="#i-user" /></svg><span>Roles</span></a>
+            <a class="nav-item" href="#/data/species" data-view="species" data-needs="admin"><svg class="icon"><use href="#i-book" /></svg><span>Species</span></a>
+            <a class="nav-item" href="#/data/livinglabs" data-view="livinglabs" data-needs="admin"><svg class="icon"><use href="#i-area" /></svg><span>Living labs</span></a>
+            <a class="nav-item" href="#/data/report-types" data-view="report-types" data-needs="admin"><svg class="icon"><use href="#i-flag" /></svg><span>Report types</span></a>
           </div>
           <div class="nav-section">
             <div class="nav-label">Reference</div>
-            <a class="nav-item" href="#/data/species" data-view="species" data-type="species"><svg class="icon"><use href="#i-book" /></svg><span>Species</span></a>
+            <a class="nav-item" href="#/data/species" data-view="species" data-not="admin"><svg class="icon"><use href="#i-book" /></svg><span>Species</span></a>
+            <a class="nav-item" href="#/data/livinglabs" data-view="livinglabs" data-not="admin"><svg class="icon"><use href="#i-area" /></svg><span>Living labs</span></a>
           </div>
         </nav>
         <div class="sidebar-foot">
@@ -445,7 +460,10 @@
               <h1 id="recordsTitle"></h1>
               <p id="recordsDescription"></p>
             </div>
-            <div class="page-actions" id="recordsActions"></div>
+            <div class="page-actions">
+              <a class="btn outline" id="recordsSwitch" hidden></a>
+              <span class="row" id="recordsActions"></span>
+            </div>
           </div>
           <div class="page-body">
             <div class="callout" id="recordsNote" hidden></div>

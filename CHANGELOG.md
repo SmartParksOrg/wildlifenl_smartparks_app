@@ -12,8 +12,12 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - The People page shows the profile of a person: email address, roles, gender, date of birth, postcode and how often the person visits nature. An administrator sees it for everyone, every other account for itself.
 
+- Lists of what is yours: My reports, My answers, My messages, My alarms and My zones. A researcher goes from all experiments to the own ones with one button.
+
 ### Changed
 
+- The navigation has a section per audience: Monitor, Mine, Research, Analyze, Admin and Reference. A section and an entry only show when the roles of the account open them. Admin holds the accounts, roles, species, living labs and report types for an administrator; everyone else finds species and living labs under Reference.
+- Animals, Sensors, Detections and the Data explorer are left out of the navigation for an account whose roles cannot read them.
 - The layers panel of the live map leaves out a tab that has nothing to show, such as Animals for an account that may not list them. Sensors stays, and Detectors and Events stay for an account that can search for them.
 
 ### Fixed
