@@ -4,6 +4,21 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.4.0 - 2026-11-21
+
+### Added
+
+- Pages for the kinds of records the Database page shows: reports from people, alarms, living labs, zones, experiments with their questionnaires, messages and responses, species, people and roles. One list page and one record page draw all of them.
+- Records are linked: a field that names another record is a link to it, and a record with a place has a small map and a "Show on map" button. The Database page links each kind of record to its list.
+- Live map layers for reports from people, living labs and zones, and the visits of a living lab.
+- The layers panel has a tab per kind, each with a search, grouping, sorting, folding groups, a tick per row and group, and show, hide, unfold and fold all, as in Protect.
+
+### Changed
+
+- Animals come first, as entities do in Protect. The map, the lists, the search and the data explorer are about animals; the sensor is the technical source behind an animal, with its own list and page. A sensor that is not on an animal still shows as a sensor.
+- The navigation only shows what the account may read.
+- Searching an area on the map looks for detections and for reports.
+
 ## 2.3.0 - 2026-11-21
 
 ### Added

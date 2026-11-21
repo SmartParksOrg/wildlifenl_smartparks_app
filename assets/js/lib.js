@@ -187,11 +187,12 @@ export function webLink(value) {
   return /^https?:\/\/[^\s]+$/i.test(String(value || "").trim()) ? String(value).trim() : "";
 }
 
-/** The page and its parameters from a location hash like `#/sensors/A1?range=168`. */
+/** The page and its parameters from a location hash like `#/sensors/A1?range=168`; a record
+ * page has a third part, `#/data/species/{id}`. */
 export function parseHash(hash) {
   const [path, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
-  return { page: parts[0] || "", id: parts[1] || "", query: Object.fromEntries(new URLSearchParams(query)) };
+  return { page: parts[0] || "", id: parts[1] || "", sub: parts[2] || "", query: Object.fromEntries(new URLSearchParams(query)) };
 }
 
 /** The hash for a page, an optional id and query values; empty values are left out. */
@@ -336,9 +337,10 @@ function isList(schema) {
   return [].concat(schema.type || []).includes("array");
 }
 
-function words(name) {
+/** A field or table name of the API in plain words: `locationTimestamp` is "Location timestamp". */
+export function words(name) {
   const spaced = String(name).replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/ID$/, " ID").trim();
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase().replace(/\bid\b/g, "ID");
+  return (spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()).replace(/\bid\b/gi, "ID");
 }
 
 /** The kind of a field in words a person without a technical background reads. */

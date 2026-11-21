@@ -16,10 +16,15 @@ function draw() {
     ["Roles", session.scopes.length ? el("span", { class: "row" }, session.scopes.map((scope) => el("span", { class: "badge", text: scope }))) : "None. The account can sign in but reads only what every user may read."],
   ]);
   const access = [
-    ["List the deployed sensors", SCOPES.deployments],
-    ["Sensor readings: live map, sensor pages and data explorer", SCOPES.readings],
-    ["Detections", SCOPES.detections],
+    ["The animals with a sensor", SCOPES.deployments],
+    ["Readings: the track and measurements of an animal or a sensor", SCOPES.readings],
+    ["Detections, reports from others and visits of a living lab", SCOPES.detections],
+    ["Zones", SCOPES.zones],
+    ["Experiments with their questionnaires, messages and responses", SCOPES.research],
+    ["All alarms (every account sees its own)", SCOPES.alarms],
+    ["The accounts", SCOPES.profiles],
   ];
+
   $("accessTable").replaceChildren(
     el("thead", {}, el("tr", {}, ["What", "Needs one of these roles", "Your account"].map((text) => el("th", { text })))),
     el(

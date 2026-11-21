@@ -1,14 +1,16 @@
-// The detections the app has found, shared by the live map (the detectors layer) and the
-// Detections page (the list).
+// What the app has found around places: the detections of camera traps and other detectors,
+// and the reports people made (the API calls those interactions). The live map shows both as
+// layers and the Detections and Reports pages list them.
 //
 // WildlifeNL only answers within 10 km of a point and has no list of detectors, so an area is
-// searched circle by circle. Every place with a detection is remembered in this browser, per
+// searched circle by circle. Every place with a find is remembered in this browser, per
 // server, and from then on only those places are asked.
 
+import { SCOPES } from "./api.js";
 import { circleGrid, coverPlaces, toPoint, toTime } from "./lib.js";
-import { account, explain } from "./session.js";
+import { account, explain, hasScope } from "./session.js";
 
-/** WildlifeNL answers a detection query within at most this many metres of a point. */
+/** WildlifeNL answers such a query within at most this many metres of a point. */
 export const MAX_RADIUS_M = 10000;
 /** At most this many circles in one search: about four minutes at the pace below. */
 const MAX_CIRCLES = 300;
@@ -21,10 +23,12 @@ function dateText(t) {
   return new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-/** `found` holds every detection of the period by ID; `progress` is a line for the person
- * while a search runs; `message` says how the last search ended when it found nothing. */
+/** `found` holds every detection of the period by ID and `reports` every report; `progress`
+ * is a line for the person while a search runs; `message` says how the last search ended
+ * when it found nothing. */
 export const detections = {
   found: new Map(),
+  reports: new Map(),
   from: dateText(Date.now() - DEFAULT_DAYS * DAY),
   to: dateText(Date.now()),
   busy: false,
@@ -32,6 +36,12 @@ export const detections = {
   message: "",
   loaded: false,
 };
+
+/** The two kinds of finds: where the API keeps them, who may ask, where they land. */
+const KINDS = [
+  { path: "detections", scope: SCOPES.detections, into: () => detections.found, places: "wnl-detection-places" },
+  { path: "interactions", scope: SCOPES.reports, into: () => detections.reports, places: "wnl-report-places" },
+];
 
 const listeners = new Set();
 let run = 0;
@@ -46,25 +56,35 @@ function changed() {
   for (const listener of listeners) listener();
 }
 
-function placesKey() {
-  return `wnl-detection-places:${new URL(account.session.baseUrl).host}`;
+function placesKey(name) {
+  return `${name}:${new URL(account.session.baseUrl).host}`;
 }
 
-/** The places where a detector was found before. */
-export function knownPlaces() {
+function placesOf(name) {
   try {
-    const places = JSON.parse(localStorage.getItem(placesKey()) || "[]");
+    const places = JSON.parse(localStorage.getItem(placesKey(name)) || "[]");
     return Array.isArray(places) ? places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)) : [];
   } catch {
     return [];
   }
 }
 
-function remember(list) {
-  const places = knownPlaces();
+/** The places where a detector or a report was found before. */
+export function knownPlaces() {
+  return KINDS.flatMap((kind) => placesOf(kind.places));
+}
+
+/** Where a report happened: the place the person pointed at, else where the person stood. */
+export function reportPlace(report) {
+  const place = report.place || report.location;
+  return place && Number.isFinite(place.latitude) && Number.isFinite(place.longitude) ? { lat: place.latitude, lng: place.longitude } : null;
+}
+
+function remember(kind, list) {
+  const places = placesOf(kind.places);
   const seen = new Set(places.map((p) => `${p.lat},${p.lng}`));
-  for (const detection of list) {
-    const point = toPoint(detection, "start");
+  for (const item of list) {
+    const point = kind.path === "detections" ? toPoint(item, "start") : reportPlace(item);
     if (!point) continue;
     const place = { lat: Math.round(point.lat * 1000) / 1000, lng: Math.round(point.lng * 1000) / 1000 };
     if (!seen.has(`${place.lat},${place.lng}`)) {
@@ -72,14 +92,14 @@ function remember(list) {
       places.push(place);
     }
   }
-  localStorage.setItem(placesKey(), JSON.stringify(places));
+  localStorage.setItem(placesKey(kind.places), JSON.stringify(places));
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** One circle, paced so a long search stays under the limit of the API; a "slow down"
- * answer is waited out and tried again. */
-async function searchCircle(centre, mine) {
+/** One question about one circle, paced so a long search stays under the limit of the API;
+ * a "slow down" answer is waited out and tried again. */
+async function ask(kind, centre, mine) {
   const start = new Date(toTime(`${detections.from}T00:00`)).toISOString();
   const end = new Date(toTime(`${detections.to}T23:59:59`)).toISOString();
   for (let attempt = 0; attempt < 4 && mine === run; attempt++) {
@@ -88,7 +108,7 @@ async function searchCircle(centre, mine) {
     if (pause > 0) await wait(pause);
     if (mine !== run) return [];
     try {
-      return await account.api.detections({ start, end, latitude: centre.lat, longitude: centre.lng, radius: MAX_RADIUS_M });
+      return await account.api.around(kind.path, { start, end, latitude: centre.lat, longitude: centre.lng, radius: MAX_RADIUS_M });
     } catch (error) {
       if (error.status !== 429) throw error;
       detections.progress = "WildlifeNL asks to slow down, waiting 20 seconds…";
@@ -101,6 +121,7 @@ async function searchCircle(centre, mine) {
 
 async function search(centres, label) {
   const mine = ++run;
+  const kinds = KINDS.filter((kind) => hasScope(kind.scope));
   detections.busy = true;
   detections.message = "";
   let done = 0;
@@ -109,10 +130,12 @@ async function search(centres, label) {
       if (mine !== run) return;
       detections.progress = centres.length > 1 ? `${label} ${done + 1} of ${centres.length}` : "Searching…";
       changed();
-      const list = await searchCircle(centre, mine);
-      if (mine !== run) return;
-      for (const detection of list) detections.found.set(detection.ID, detection);
-      if (list.length) remember(list);
+      for (const kind of kinds) {
+        const list = await ask(kind, centre, mine);
+        if (mine !== run) return;
+        for (const item of list) kind.into().set(item.ID, item);
+        if (list.length) remember(kind, list);
+      }
       done++;
     }
   } catch (error) {
@@ -122,23 +145,24 @@ async function search(centres, label) {
   if (mine !== run) return;
   detections.busy = false;
   detections.progress = "";
-  if (!detections.found.size && !detections.message) {
-    detections.message = knownPlaces().length ? "No detections in this period at the known detectors. Choose a longer period, or search another part of the map." : "No detections found there. Search another part of the map; the app remembers where it finds detectors.";
+  if (!detections.found.size && !detections.reports.size && !detections.message) {
+    detections.message = knownPlaces().length ? "Nothing in this period at the known places. Choose a longer period, or search another part of the map." : "Nothing found there. Search another part of the map; the app remembers where it finds detectors and reports.";
   }
   changed();
 }
 
-/** Loads the period at the known detectors, once; `force` loads it again. */
+/** Loads the period at the known places, once; `force` loads it again. */
 export function loadDetections(force = false) {
   if (detections.loaded && !force) return;
   detections.loaded = true;
   detections.found.clear();
+  detections.reports.clear();
   const centres = coverPlaces(knownPlaces(), MAX_RADIUS_M * 0.9);
-  if (centres.length) return search(centres, "Loading detector area");
+  if (centres.length) return search(centres, "Loading known area");
   run++;
   detections.busy = false;
   detections.progress = "";
-  detections.message = "No detectors known yet. WildlifeNL only answers within 10 km of a point: open the live map, go to an area and search it for detections under Layers.";
+  detections.message = "Nothing known yet. WildlifeNL only answers within 10 km of a point: open the live map, go to an area and search it under Layers.";
   changed();
 }
 
@@ -200,6 +224,7 @@ export function detectorsOf(list = [...detections.found.values()]) {
 export function resetDetections() {
   run++;
   detections.found.clear();
+  detections.reports.clear();
   detections.from = dateText(Date.now() - DEFAULT_DAYS * DAY);
   detections.to = dateText(Date.now());
   detections.busy = false;

@@ -22,12 +22,15 @@ assets/js/lib.js         Pure functions: times, tracks, metrics, buckets, CSV. N
 assets/js/api.js         WildlifeNlClient
 assets/js/session.js     The signed-in account: token storage, roles, sign out
 assets/js/store.js       The sensors and their readings, fetched once and kept in memory
-assets/js/detections.js  The detections: searching an area, remembered detector places
+assets/js/detections.js  Detections and reports: searching an area, remembered places
+assets/js/records.js     Every other kind of record: where it is read and what it links to
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
 assets/js/app.js         Sign-in, the frame (top bar, folding navigation, search) and the router
-assets/js/pages/*.js     One module per page: map, sensors, sensor, explore, detections, database, about, account
+assets/js/pages/*.js     One module per page: map (with map-layers), sensors (the Animals and Sensors
+                         lists), sensor (the animal page and the sensor page), explore, detections,
+                         records (every other list and record), database, about, account
 tests/lib.test.js        Unit tests for lib.js
 .nojekyll                Tells GitHub Pages to serve the files untouched
 ```
@@ -36,9 +39,9 @@ Rule of thumb: logic that can be wrong in a subtle way goes in `lib.js` with a t
 
 ## Pages and addresses
 
-The address after `#` chooses the page: `#/map`, `#/sensors`, `#/sensors/{id}`, `#/explore`, `#/detections`, `#/database`, `#/about`, `#/account`. `parseHash` and `buildHash` in `lib.js` read and write it. `app.js` shows the matching section and calls the page module's `show(route)`; on sign out it calls every module's `reset()`.
+The address after `#` chooses the page: `#/map`, `#/animals`, `#/animals/{animal id}`, `#/sensors`, `#/sensors/{sensor id}`, `#/explore`, `#/detections`, `#/data/{kind}`, `#/data/{kind}/{id}`, `#/database`, `#/about`, `#/account`. `parseHash` and `buildHash` in `lib.js` read and write it. `app.js` shows the matching section and calls the page module's `show(route)`; on sign out it calls every module's `reset()`.
 
-- `#/map?sensor={id}&track=1` selects a sensor and draws its track; the page then cleans the address.
+- `#/map?animal={id}&track=1` selects an animal and draws its track; `?sensor=`, `?detector=`, `?report=`, `?area=`, `?at=lat,lng` and `?layers={tab}` work the same way. The page then cleans the address.
 - `#/explore?sensors=a,b&metrics=temperature,speed&range=168&bucket=1h` is the whole state of the data explorer, so a link reproduces a view.
 
 ## Frame
@@ -56,6 +59,22 @@ The name of the app is `APP_NAME` in `api.js`. WildlifeNL also uses it in the lo
 `DATA_GROUPS` in `lib.js` holds the one thing the API cannot tell: which subject a table belongs to, its name in plain words and one line of explanation. A table the API adds later shows up under "Other" with its own name until someone adds it there.
 
 `pages/database.js` draws the model as SVG: a column per subject, a box per table, a curve per link. A click on a box highlights its links and lists its fields.
+
+## Animals and sensors
+
+A sensor deployment in WildlifeNL ties a sensor to an animal, the way Protect ties a device to an entity. The app follows Protect: the animal is the object people see, the sensor the technical source. In the code the sensor stays the key, because the readings hang under the sensor ID: `store.js` holds sensors, each with its `animal` when it is on one, and `sensorByAnimal` goes from an animal to its sensor.
+
+- The Animals list and the Sensors list are one module (`pages/sensors.js`) with two descriptions in `LISTS`.
+- The animal page and the sensor page are one module (`pages/sensor.js`): the same facts, track, charts and readings, led by the animal or by the sensor, with a button to the other side.
+- On the live map a sensor on an animal is selected as an animal; only sensors without one are sensors there (`tabOf` in `pages/map.js`).
+
+## Other records
+
+`records.js` describes every kind of record that has no page of its own (`TYPES`): where its list and a single record are read, which roles that needs, the columns of its list and the lists that hang under one record. `pages/records.js` draws a list page and a record page for all of them from the data itself.
+
+Links come from two places. `FIELD_TYPES` says which kind of record a field holds by the field's name (`species`, `user`, `zone`, `questionnaire` and so on), and `linkOf` turns such a value into a link; it also knows that a `sensorID` leads to a sensor page, an animal to an animal page and a `deploymentID` to the detections of that detector. Every record that passes by is kept in memory (`keep`), so a record page can show what was seen of it elsewhere when the account may not read it directly.
+
+To add a kind of record: add it to `TYPES`, add the field names that point at it to `FIELD_TYPES`, and add it to `DATA_GROUPS` in `lib.js` so the Database page names it. A navigation entry with `data-type` is hidden when `canList` says the account can read nothing behind it.
 
 ## Sensors and readings
 
@@ -107,11 +126,11 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-session` | `localStorage` when "Keep me signed in" is on, else `sessionStorage` | API address, token, email, user ID, name, roles |
 | `wnl-theme` | `localStorage` | `light`, `dark` or `system` |
 | `wnl-sensors` | `localStorage` | The sensor IDs the user added by hand |
-| `wnl-map-hidden` | `localStorage` | The sensors hidden on the live map |
 | `wnl-basemap` | `localStorage` | The chosen base map |
 | `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
 | `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
-| `wnl-map-detectors` | `localStorage` | Whether the detectors layer is shown |
+| `wnl-map-layers` | `localStorage` | The layers panel: the open tab and per tab the hidden rows, folded groups, arrangement and sorting |
+| `wnl-report-places:{server}` | `localStorage` | The places where reports were found |
 | `wnl-server` | `localStorage` | The platform of the last sign-in, chosen again next time |
 | `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
@@ -124,6 +143,8 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 
 3D terrain (`setTerrain`, `applyTerrain`) uses the open Terrain Tiles on AWS in the `terrarium` encoding, again without a key: a hillshade layer under the data and MapLibre's terrain with Protect's exaggeration (1.3) and pitch (55). The choice is stored under `wnl-terrain`. A style change drops sources and layers, so terrain and data are applied again on `style.load`.
 
+The layers panel (`pages/map-layers.js`) follows the one of Protect: a tab per kind, and `drawTab` gives every tab the same search, arrangement, sorting, folding groups with a three-state tick, and the line to show, hide, unfold or fold all. What the person chose is kept under `wnl-map-layers`. `LiveMap.setItems(kind, items)` takes what each layer shows; an item carries `selected`, and the map tells the page what was clicked through `onPick(kind, id)`.
+
 The live map page (`pages/map.js`) places its controls as Protect does: the Layers button top left, the tools as square buttons top right (`.map-tools`), MapLibre's zoom, north and locate bottom right, and the panels in one column beside the tools (`.map-cards`), where the layers panel shrinks so the selected sensor always fits under it. On a phone the column rises from the bottom. Measuring is a mode of `LiveMap`: while it is on, a click adds a point to a dashed line and the page adds up the legs.
 
 A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for a dark ground.
@@ -135,7 +156,8 @@ A track draws every fix in its line but at most 2000 dots, and the popup of a po
 - `searchBox` covers a box with a honeycomb of 10 km circles (`circleGrid` in `lib.js`) and asks them one by one. More than 300 circles are refused with a hint to zoom in.
 - `searchCircle` spaces the requests 700 ms apart, about 85 a minute, under the API's default of 120 requests a minute per token (`RATE_LIMIT_MAX_REQUESTS` in the API's source). A `429` answer is waited out for 20 seconds and tried again.
 - Every place with a detection is kept in `localStorage` under `wnl-detection-places:{server}`, rounded to about 100 metres. `coverPlaces` turns those places into the fewest circles, and that is all `loadDetections` asks.
-- `detectorsOf` groups detections into detectors, one per `deploymentID` and place. The live map draws them with `LiveMap.setDetectors`, as a diamond with a camera, Protect's shape for events.
+- `detectorsOf` groups detections into detectors, one per `deploymentID` and place. The live map draws them as a diamond with a camera, Protect's shape for events.
+- Reports from people (`GET /interactions/`, the same kind of call) are searched in the same circles and kept in `detections.reports`.
 
 The design documents of the API (`docs/FunctionalDesign.md` in its repository) describe what detections are for: people view them on a map, and a detection of less than an hour old raises an alarm for every zone that contains it and lists its species.
 
@@ -176,7 +198,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, the live map with a track, the search, the sensors list, a sensor page, the data explorer, detections, the database page, sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, sign out, reload while signed in.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 

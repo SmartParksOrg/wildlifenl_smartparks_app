@@ -60,6 +60,14 @@ export const SCOPES = {
   deployments: ["herd-manager"],
   readings: ["land-user", "nature-area-manager", "wildlife-manager", "herd-manager"],
   detections: ["nature-area-manager", "wildlife-manager", "herd-manager"],
+  reports: ["nature-area-manager", "wildlife-manager", "herd-manager"],
+  visits: ["nature-area-manager", "wildlife-manager", "herd-manager"],
+  zones: ["land-user", "wildlife-manager"],
+  animal: ["herd-manager"],
+  report: ["wildlife-manager", "researcher"],
+  research: ["researcher"],
+  alarms: ["administrator", "researcher"],
+  profiles: ["administrator"],
 };
 
 export class WildlifeNlClient {
@@ -147,9 +155,11 @@ export class WildlifeNlClient {
     }
   }
 
-  detections({ start, end, latitude, longitude, radius }) {
+  /** What happened within `radius` metres of a point in a period: `kind` is `detections`,
+   * `interactions` or `animals`. The API allows at most 10 km. */
+  around(kind, { start, end, latitude, longitude, radius }) {
     const query = new URLSearchParams({ start, end, latitude, longitude, radius });
-    return this.list(`/detections/?${query}`);
+    return this.list(`/${kind}/?${query}`);
   }
 
   /** The API's own description of everything it offers and stores. */

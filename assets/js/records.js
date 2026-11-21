@@ -1,0 +1,278 @@
+// Every kind of record WildlifeNL keeps that has no page of its own: where it is read, what
+// a list of it shows and what it links to. One generic list page and one generic record page
+// (pages/records.js) draw all of them from these descriptions, so a link between two records
+// in the data is a link in the app.
+
+import { SCOPES } from "./api.js";
+import { detections, loadDetections } from "./detections.js";
+import { buildHash } from "./lib.js";
+import { account, hasScope } from "./session.js";
+
+/** The address of a list (`#/data/species`) or of one record (`#/data/species/{id}`). */
+export function recordHash(type, id = "") {
+  if (type === "animals") return buildHash("animals", id); // animals have pages of their own
+  return `#/data/${type}${id === "" || id == null ? "" : `/${encodeURIComponent(id)}`}`;
+}
+
+const DAY = 24 * 3600 * 1000;
+
+/** Visits per cell of a living lab over the last 30 days, the busiest first. */
+async function visits(lab) {
+  const query = new URLSearchParams({ start: new Date(Date.now() - 30 * DAY).toISOString(), end: new Date().toISOString(), livingLabID: lab.ID, cellSize: 250 });
+  const answer = await account.api.call("GET", `/visitation/?${query}`);
+  return ((answer && answer.cells) || []).map((cell) => ({ count: cell.count, location: cell.centroid })).sort((a, b) => b.count - a.count);
+}
+
+/** Reports found on the map plus the ones the account made itself. */
+async function reports() {
+  await loadDetections();
+  const all = new Map(detections.reports);
+  for (const report of await account.api.list("/interactions/me/")) all.set(report.ID, report);
+  return [...all.values()];
+}
+
+const research = (path) => ({ needs: SCOPES.research, load: (record) => account.api.list(`/${path}/experiment/${record.ID}`) });
+
+/**
+ * The kinds of records, by the word in the address.
+ * - `table` is the name in the API, `nav` the entry of the navigation it belongs under.
+ * - `needs` are the roles for the list (none: every account); `mine` is the list every
+ *   account gets instead when it lacks them.
+ * - `get` reads one record in full, `getNeeds` are its roles.
+ * - `columns` are the fields of the list, `title` the name of one record.
+ * - `related` are lists that hang under one record, each with its type and loader.
+ */
+export const TYPES = {
+  species: {
+    table: "Species",
+    label: "Species",
+    plural: "Species",
+    nav: "species",
+    description: "The kinds of animals WildlifeNL knows, with advice for people who meet one",
+    path: "/species/",
+    get: (id) => `/species/${id}`,
+    columns: ["commonName", "name", "category"],
+    title: (record) => record.commonName || record.name,
+  },
+  livinglabs: {
+    table: "LivingLab",
+    label: "Living lab",
+    plural: "Living labs",
+    nav: "livinglabs",
+    description: "The research areas, each with its boundary",
+    path: "/livinglabs/",
+    get: (id) => `/livinglab/${id}`,
+    columns: ["name", "definition"],
+    related: [{ label: "Visits per 250 m cell, last 30 days", needs: SCOPES.visits, load: visits, columns: ["count", "location"], onMap: true }],
+  },
+  zones: {
+    table: "Zone",
+    label: "Zone",
+    plural: "Zones",
+    nav: "zones",
+    description: "The areas you drew to be warned about certain species",
+    path: "/zones/me/",
+    needs: SCOPES.zones,
+    columns: ["name", "species", "created", "deactivated"],
+  },
+  reports: {
+    table: "Interaction",
+    label: "Report",
+    plural: "Reports",
+    nav: "reports",
+    description: "What people reported: a sighting, damage or a collision with an animal",
+    list: reports,
+    get: (id) => `/interaction/${id}`,
+    getNeeds: SCOPES.report,
+    columns: ["moment", "type", "species", "notes", "user", "place"],
+    title: (record) => [record.type && record.type.name, record.species && (record.species.commonName || record.species.name)].filter(Boolean).join(": ") || "Report",
+    hint: "Reports are found like detections: WildlifeNL answers within 10 km of a point, so search an area under Layers on the live map. Your own reports are always listed.",
+  },
+  "report-types": {
+    table: "InteractionType",
+    label: "Report type",
+    plural: "Report types",
+    nav: "reports",
+    description: "The kinds of reports people can make",
+    path: "/interactionTypes/",
+    columns: ["name", "description"],
+  },
+  alarms: {
+    table: "Alarm",
+    label: "Alarm",
+    plural: "Alarms",
+    nav: "alarms",
+    description: "An animal, a detection or a report came inside a zone",
+    path: "/alarms/",
+    needs: SCOPES.alarms,
+    mine: "/alarms/me/",
+    columns: ["timestamp", "zone", "animal", "detection", "interaction"],
+    title: (record) => `Alarm in ${(record.zone && record.zone.name) || "a zone"}`,
+  },
+  experiments: {
+    table: "Experiment",
+    label: "Experiment",
+    plural: "Experiments",
+    nav: "experiments",
+    description: "The studies, each in a living lab, with their questionnaires and messages",
+    path: "/experiments/",
+    needs: SCOPES.research,
+    get: (id) => `/experiment/${id}`,
+    getNeeds: SCOPES.research,
+    columns: ["name", "livingLab", "start", "end", "user"],
+    related: [
+      { label: "Questionnaires", type: "questionnaires", ...research("questionnaires"), columns: ["name", "identifier", "interactionType"] },
+      { label: "Messages", type: "messages", ...research("messages"), columns: ["name", "severity", "species", "text"] },
+      { label: "Reports", type: "reports", ...research("interactions"), columns: ["moment", "type", "species", "user"] },
+      { label: "Responses", type: "responses", ...research("responses"), columns: ["timestamp", "question", "answer", "text"] },
+      { label: "Sent messages", type: "conveyances", ...research("conveyances"), columns: ["timestamp", "message", "user", "animal"] },
+      { label: "Contacts", type: "contacts", ...research("contacts"), columns: ["start", "end", "user", "borneSensorDeployment"] },
+      { label: "Tracking readings", type: "tracking", ...research("tracking-readings"), columns: ["timestamp", "userID", "location"] },
+    ],
+  },
+  questionnaires: {
+    table: "Questionnaire",
+    label: "Questionnaire",
+    plural: "Questionnaires",
+    nav: "experiments",
+    description: "A list of questions that belongs to an experiment",
+    get: (id) => `/questionnaire/${id}`,
+    columns: ["name", "identifier", "experiment", "interactionType"],
+    related: [{ label: "Responses", type: "responses", needs: SCOPES.research, load: (record) => account.api.list(`/responses/questionnaire/${record.ID}`), columns: ["timestamp", "question", "answer", "text"] }],
+  },
+  questions: { table: "Question", label: "Question", plural: "Questions", nav: "experiments", description: "One question of a questionnaire", get: (id) => `/question/${id}`, columns: ["index", "text", "description"], title: (record) => record.text || "Question" },
+  answers: { table: "Answer", label: "Answer option", plural: "Answer options", nav: "experiments", description: "One answer a person can pick", get: (id) => `/answer/${id}`, columns: ["index", "text"], title: (record) => record.text || "Answer" },
+  messages: { table: "Message", label: "Message", plural: "Messages", nav: "experiments", description: "A text of an experiment that is shown to people", get: (id) => `/message/${id}`, columns: ["name", "severity", "species", "text"] },
+  responses: { table: "Response", label: "Response", plural: "Responses", nav: "experiments", description: "What you answered to questions", path: "/responses/me/", columns: ["timestamp", "question", "answer", "text"], title: (record) => record.text || (record.answer && record.answer.text) || "Response" },
+  conveyances: { table: "Conveyance", label: "Sent message", plural: "Sent messages", nav: "alarms", description: "The messages and alarms that were shown to you", path: "/conveyances/me/", columns: ["timestamp", "message", "alarm", "animal"], title: (record) => (record.message && record.message.name) || "Sent message" },
+  contacts: { table: "Contact", label: "Contact", plural: "Contacts", nav: "alarms", description: "The times your phone was near an animal's sensor", path: "/contacts/me/", columns: ["start", "end", "borneSensorDeployment", "startLocation"], title: () => "Contact" },
+  tracking: { table: "TrackingReading", label: "Tracking reading", plural: "Tracking readings", nav: "people", description: "Where the recreation app recorded you", path: "/tracking-readings/me/", columns: ["timestamp", "location"], title: () => "Tracking reading" },
+  people: {
+    table: "Profile",
+    label: "Person",
+    plural: "People",
+    nav: "people",
+    description: "The accounts, with their roles",
+    path: "/profiles/",
+    needs: SCOPES.profiles,
+    get: (id) => (hasScope(SCOPES.profiles) ? `/profile/${id}` : `/user/${id}`),
+    columns: ["name", "email", "roles"],
+    hint: "Only administrators may list the accounts. A name in another record still opens that person.",
+  },
+  roles: { table: "Role", label: "Role", plural: "Roles", nav: "people", description: "What an account may do", path: "/roles/", columns: ["name"] },
+};
+
+/** Which kind of record a field holds, by the name of the field in the API. */
+const FIELD_TYPES = {
+  species: "species",
+  user: "people",
+  livingLab: "livinglabs",
+  zone: "zones",
+  interaction: "reports",
+  interactions: "reports",
+  type: "report-types",
+  interactionType: "report-types",
+  alarm: "alarms",
+  experiment: "experiments",
+  questionnaire: "questionnaires",
+  question: "questions",
+  questions: "questions",
+  answer: "answers",
+  answers: "answers",
+  message: "messages",
+  response: "responses",
+  conveyance: "conveyances",
+  conveyances: "conveyances",
+  roles: "roles",
+};
+
+/** The page of a table of the Database drawing: a list of records, or a page that exists. */
+export function tableHash(table) {
+  const own = { Animal: buildHash("animals"), BorneSensorDeployment: buildHash("sensors"), BorneSensorReading: buildHash("sensors"), Detection: buildHash("detections"), Credential: buildHash("account"), User: recordHash("people"), Visitation: recordHash("livinglabs") };
+  if (own[table]) return own[table];
+  const type = Object.keys(TYPES).find((key) => TYPES[key].table === table);
+  return type ? recordHash(type) : "";
+}
+
+/** A record that is seen anywhere is kept, so its page can show it without a request. */
+const seen = new Map();
+
+function idOf(record) {
+  return record && (typeof record.ID === "string" || typeof record.ID === "number") ? String(record.ID) : "";
+}
+
+function keep(type, record) {
+  const id = idOf(record);
+  if (!id) return;
+  const key = `${type}|${id}`;
+  seen.set(key, { ...(seen.get(key) || {}), ...record });
+  for (const [field, value] of Object.entries(record)) {
+    const inner = FIELD_TYPES[field];
+    if (inner) for (const item of [].concat(value || [])) if (item && typeof item === "object") keep(inner, item);
+  }
+}
+
+/** Where a field points: `{href, text}` for a link, or null when it is no link. */
+export function linkOf(field, value) {
+  if (value == null || value === "") return null;
+  if (field === "sensorID" && typeof value === "string") return { href: buildHash("sensors", value), text: value };
+  if (field === "deploymentID" && typeof value === "string") return { href: buildHash("detections", "", { detector: value }), text: value };
+  if (field === "detection" && idOf(value)) return { href: buildHash("detections", "", { detector: value.deploymentID }), text: `Detection at ${value.deploymentID || "a detector"}` };
+  if (field === "borneSensorDeployment" && value.sensorID) return { href: buildHash("sensors", value.sensorID), text: value.sensorID };
+  if ((field === "animal" || field === "animals") && idOf(value)) return { href: buildHash("animals", idOf(value)), text: value.name || "Animal" };
+  const type = FIELD_TYPES[field];
+  if (!type || typeof value !== "object" || !idOf(value)) return null;
+  return { href: recordHash(type, idOf(value)), text: titleOf(type, value) };
+}
+
+export function titleOf(type, record) {
+  const def = TYPES[type];
+  return (def.title && def.title(record)) || record.name || record.commonName || record.text || `${def.label} ${idOf(record)}`;
+}
+
+/** Whether the account may read the list of a kind, in full or only its own. */
+export function canList(type) {
+  const def = TYPES[type];
+  return Boolean(def.list || def.mine || (def.path && hasScope(def.needs || [])));
+}
+
+/** The records of a kind and whether the account sees only its own. */
+export async function listRecords(type) {
+  const def = TYPES[type];
+  const all = hasScope(def.needs || []);
+  let records;
+  if (def.list) records = await def.list();
+  else if (def.path && all) records = await account.api.list(def.path);
+  else if (def.mine) records = await account.api.list(def.mine);
+  else records = [...seen.entries()].filter(([key]) => key.startsWith(`${type}|`)).map(([, record]) => record);
+  for (const record of records) keep(type, record);
+  return { records, own: Boolean(def.mine && !all) };
+}
+
+/** One record: read in full when the account may, else what was seen of it elsewhere. */
+export async function getRecord(type, id) {
+  const def = TYPES[type];
+  const known = seen.get(`${type}|${id}`) || null;
+  if (def.get && hasScope(def.getNeeds || [])) {
+    try {
+      const record = await account.api.call("GET", def.get(id));
+      if (record) keep(type, record);
+    } catch (error) {
+      if (error.status === 401 || !known) throw error;
+    }
+  } else if (!known && (def.list || def.path || def.mine)) {
+    await listRecords(type);
+  }
+  return seen.get(`${type}|${id}`) || null;
+}
+
+export async function relatedRecords(relation, record) {
+  const rows = await relation.load(record);
+  if (relation.type) for (const row of rows) keep(relation.type, row);
+  return rows;
+}
+
+/** Forgets the records of the account that signed out. */
+export function resetRecords() {
+  seen.clear();
+}

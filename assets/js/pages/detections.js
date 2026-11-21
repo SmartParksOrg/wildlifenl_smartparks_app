@@ -4,6 +4,7 @@
 
 import { counted, detections, loadDetections, onDetections, setPeriod, speciesName, stopSearch } from "../detections.js";
 import { buildHash, webLink } from "../lib.js";
+import { recordHash } from "../records.js";
 import { $, DataTable, MultiPicker, formatMoment, note, plural } from "../ui.js";
 
 const COLUMNS = ["time", "species", "animals", "confidence", "description", "detector", "sensor_type", "source", "uri", "id"];
@@ -47,6 +48,7 @@ function draw() {
     return {
       time: detection.start,
       species: latin && latin !== speciesName(detection) ? `${speciesName(detection)} (${latin})` : speciesName(detection),
+      species_id: detection.species ? detection.species.ID : "",
       animals: animals.length,
       confidence: animals.length ? `${Math.max(...animals.map((a) => a.confidence || 0))}%` : "",
       description: animalText(animals),
@@ -65,6 +67,7 @@ function draw() {
     sortDir: table.sortKey ? table.sortDir : -1,
     format: { time: (value) => formatMoment(Date.parse(value)) },
     link: [
+      { column: "species", href: (row) => (row.species_id ? recordHash("species", row.species_id) : "") },
       { column: "detector", href: (row) => buildHash("map", "", { detector: row.detector }), title: "Show on map" },
       { column: "uri", href: (row) => webLink(row.uri), text: "open", title: "Open the picture in the system that made the detection", external: true },
     ],

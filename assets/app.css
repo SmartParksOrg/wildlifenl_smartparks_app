@@ -1150,7 +1150,7 @@ a.btn {
 /* the layers give way: they shrink and scroll, so the selected sensor always fits below */
 .layer-panel {
   flex: 0 1 auto;
-  min-height: 9rem;
+  min-height: 14rem;
   overflow: hidden;
 }
 
@@ -1195,59 +1195,98 @@ a.btn {
   margin-right: auto;
 }
 
-.panel-body {
+
+
+
+
+
+/* the layers panel, after the one of Protect: tabs, a search with arrange and sort, rows
+   in groups that fold, and a line to show, hide, unfold or fold everything */
+
+.tabs {
   display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-  min-height: 0;
-  padding: 0.75rem 1rem 1rem;
-  overflow-y: auto;
+  gap: 2px;
+  margin: 0.25rem 0.75rem 0;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--muted);
 }
 
-.panel-body > * {
-  flex: none;
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 1.75rem;
+  padding: 0 0.125rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
   color: var(--muted-foreground);
-  font-size: 0.75rem;
+  font: inherit;
+  font-size: 0.6875rem;
   font-weight: 500;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.panel-title:not(:first-child) {
-  margin-top: 0.5rem;
+.tab.active {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow);
 }
 
-.panel-actions {
+.layer-tab {
   display: flex;
-  gap: 0.75rem;
-  font-size: 0.8125rem;
-  letter-spacing: 0;
-  text-transform: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.5rem 0.5rem 0;
+}
+
+.layer-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.25rem 0.5rem;
+}
+
+.layer-tools input {
+  height: 2rem;
+}
+
+.layer-arrange {
+  flex: none;
+  width: auto;
+  height: 2rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
 }
 
 .layer-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0 -0.5rem;
+  flex: 1 1 auto;
+  min-height: 2.5rem;
+  overflow-y: auto;
 }
 
 .layer-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.125rem 0.5rem;
+  min-height: 2.25rem;
+  padding-right: 0.25rem;
   border-radius: calc(var(--radius) - 2px);
+}
+
+.layer-row.header {
+  padding-left: 0.125rem;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
 }
 
 .layer-row:hover,
 .layer-row.selected {
-  background: var(--accent);
+  background: var(--muted);
 }
 
 .layer-row input {
@@ -1258,13 +1297,30 @@ a.btn {
   accent-color: var(--primary);
 }
 
+.layer-group {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-count {
+  padding-right: 0.375rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+
 .layer-name {
   all: unset;
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
   min-width: 0;
-  padding: 0.25rem 0;
+  padding: 0.1875rem 0;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 
@@ -1278,17 +1334,60 @@ a.btn {
 .layer-name small,
 .object-title small {
   color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.layer-foot,
+.layer-find {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
   font-size: 0.75rem;
+}
+
+.layer-foot {
+  margin: 0.25rem -0.5rem 0;
+}
+
+.layer-foot .btn.link,
+.layer-find .btn.link {
+  font-size: 0.75rem;
+}
+
+.layer-find {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.btn.icon.xs {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+}
+
+.card-grid.wide {
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+}
+
+.badge[href] {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.badge[href]:hover {
+  background: var(--accent);
 }
 
 .btn.icon.active {
   background: var(--accent);
 }
 
-.inline-form {
-  display: flex;
-  gap: 0.5rem;
-}
 
 .object-title {
   display: flex;
@@ -1576,11 +1675,6 @@ a.btn {
   color: var(--destructive);
 }
 
-.stack-tight {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
 
 /* Database graph */
 

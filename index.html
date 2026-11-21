@@ -42,6 +42,19 @@
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></symbol>
         <symbol id="i-check-small" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.800 9.800 0 0 1 6.700 2.700L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.800 9.800 0 0 1-6.700-2.700L3 16M8 16H3v5" /></symbol>
+        <symbol id="i-animal" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2" /><circle cx="18" cy="8" r="2" /><circle cx="20" cy="16" r="2" /><path d="M9 10a5 5 0 0 1 5 5v3.500a3.500 3.500 0 0 1-6.800 1.100 3.500 3.500 0 0 0-2.200-2.200A3.500 3.500 0 0 1 5.500 10z" /></symbol>
+        <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4a1 1 0 0 1 .400-.800A6 6 0 0 1 8 2c3 0 5 2 7.300 2a6.400 6.400 0 0 0 3.700-1v11a6 6 0 0 1-3.700 1C13 15 11 13 8 13a6 6 0 0 0-4 1.300" /></symbol>
+        <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.300 21a1.900 1.900 0 0 0 3.400 0M3.300 15.300A1 1 0 0 0 4 17h16a1 1 0 0 0 .700-1.700C19.400 14 18 12.500 18 8A6 6 0 0 0 6 8c0 4.500-1.400 6-2.700 7.300" /></symbol>
+        <symbol id="i-area" viewBox="0 0 24 24"><path d="M12 3 4 7v6l5 8h8l3-9-3-7z" /></symbol>
+        <symbol id="i-zone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="4 3" /><circle cx="12" cy="12" r="2" /></symbol>
+        <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v6.300a2 2 0 0 1-.300 1L4.300 19a2 2 0 0 0 1.700 3h12a2 2 0 0 0 1.700-3l-5.400-9.700a2 2 0 0 1-.300-1V2M8.500 2h7M7 16h10" /></symbol>
+        <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.500v-15A2.500 2.500 0 0 1 6.500 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.500a2.500 2.500 0 0 1 0-5H20" /></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.900M16 3.100a4 4 0 0 1 0 7.800" /><circle cx="9" cy="7" r="4" /></symbol>
+        <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.500 14.500A2.500 2.500 0 0 0 11 12c0-1.400-.500-2-1-3-1.100-2.100-.200-4 2-6 .500 2.500 2 4.900 4 6.500 2 1.600 3 3.500 3 5.500a7 7 0 1 1-14 0c0-1.200.400-2.300 1-3a2.500 2.500 0 0 0 2.500 2.500" /></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-sort-name" viewBox="0 0 24 24"><path d="m3 16 4 4 4-4M7 20V4M20 8h-5M15 10V6.500a2.500 2.500 0 0 1 5 0V10M15 14h5l-5 6h5" /></symbol>
+        <symbol id="i-sort-time" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16" /></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5" /></symbol>
         <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></symbol>
@@ -122,13 +135,30 @@
           <div class="nav-section">
             <div class="nav-label">Monitor</div>
             <a class="nav-item" href="#/map" data-view="map"><svg class="icon"><use href="#i-map" /></svg><span>Live map</span></a>
+            <a class="nav-item" href="#/animals" data-view="animals"><svg class="icon"><use href="#i-animal" /></svg><span>Animals</span></a>
             <a class="nav-item" href="#/sensors" data-view="sensors"><svg class="icon"><use href="#i-sensor" /></svg><span>Sensors</span></a>
             <a class="nav-item" href="#/detections" data-view="detections"><svg class="icon"><use href="#i-camera" /></svg><span>Detections</span></a>
+            <a class="nav-item" href="#/data/reports" data-view="reports" data-type="reports"><svg class="icon"><use href="#i-flag" /></svg><span>Reports</span></a>
+            <a class="nav-item" href="#/data/alarms" data-view="alarms" data-type="alarms"><svg class="icon"><use href="#i-bell" /></svg><span>Alarms</span></a>
           </div>
           <div class="nav-section">
             <div class="nav-label">Analyze</div>
             <a class="nav-item" href="#/explore" data-view="explore"><svg class="icon"><use href="#i-chart" /></svg><span>Data explorer</span></a>
             <a class="nav-item" href="#/database" data-view="database"><svg class="icon"><use href="#i-database" /></svg><span>Database</span></a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-label">Areas</div>
+            <a class="nav-item" href="#/data/livinglabs" data-view="livinglabs" data-type="livinglabs"><svg class="icon"><use href="#i-area" /></svg><span>Living labs</span></a>
+            <a class="nav-item" href="#/data/zones" data-view="zones" data-type="zones"><svg class="icon"><use href="#i-zone" /></svg><span>Zones</span></a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-label">Research</div>
+            <a class="nav-item" href="#/data/experiments" data-view="experiments" data-type="experiments"><svg class="icon"><use href="#i-flask" /></svg><span>Experiments</span></a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-label">Reference</div>
+            <a class="nav-item" href="#/data/species" data-view="species" data-type="species"><svg class="icon"><use href="#i-book" /></svg><span>Species</span></a>
+            <a class="nav-item" href="#/data/people" data-view="people" data-type="people"><svg class="icon"><use href="#i-users" /></svg><span>People</span></a>
           </div>
         </nav>
         <div class="sidebar-foot">
@@ -184,21 +214,28 @@
             <div class="card layer-panel" id="layerPanel" hidden>
               <div class="panel-head">
                 <strong>Map layers</strong>
-                <button class="btn link" type="button" id="layerReset">Reset</button>
+                <button class="btn link" type="button" id="layerReset" hidden>Reset</button>
                 <button class="btn ghost icon sm" type="button" id="layerClose" aria-label="Close" title="Close"><svg class="icon"><use href="#i-x" /></svg></button>
               </div>
-              <div class="panel-body">
-                <div class="panel-title"><span>Sensors</span><span class="panel-actions"><button class="btn link" type="button" id="layerShowAll">Show all</button><button class="btn link" type="button" id="layerHideAll">Hide all</button></span></div>
-                <input type="search" id="layerSearch" placeholder="Search…" aria-label="Search sensors" />
-                <div class="layer-list" id="layerList"></div>
-                <div class="stack-tight" id="layerDetections">
-                  <div class="panel-title"><span>Detections</span><span class="panel-actions"><a class="btn link" href="#/detections">Open the list</a></span></div>
-                  <label class="check"><input type="checkbox" id="mapDetections" checked /><span id="mapDetectionsLabel">Detectors</span></label>
-                  <span class="hint" id="mapDetectionsText"></span>
-                  <div class="row">
-                    <button class="btn outline sm" type="button" id="mapDetectionsSearch"><svg class="icon"><use href="#i-search" /></svg>Search this view</button>
-                    <button class="btn outline sm" type="button" id="mapDetectionsStop" hidden>Stop</button>
-                  </div>
+              <div class="tabs" id="layerTabs" role="tablist">
+                <button class="tab" type="button" role="tab" data-tab="animals">Animals</button>
+                <button class="tab" type="button" role="tab" data-tab="sensors">Sensors</button>
+                <button class="tab" type="button" role="tab" data-tab="detectors">Detectors</button>
+                <button class="tab" type="button" role="tab" data-tab="reports">Reports</button>
+                <button class="tab" type="button" role="tab" data-tab="areas">Areas</button>
+              </div>
+              <div class="layer-tab" id="layerTab-animals" role="tabpanel"></div>
+              <div class="layer-tab" id="layerTab-sensors" role="tabpanel" hidden></div>
+              <div class="layer-tab" id="layerTab-detectors" role="tabpanel" hidden></div>
+              <div class="layer-tab" id="layerTab-reports" role="tabpanel" hidden></div>
+              <div class="layer-tab" id="layerTab-areas" role="tabpanel" hidden></div>
+              <div class="layer-find" id="layerFind" hidden>
+                <span class="hint" id="layerFindText"></span>
+                <div class="row">
+                  <button class="btn outline sm" type="button" id="layerFindSearch"><svg class="icon"><use href="#i-search" /></svg>Search this view</button>
+                  <button class="btn outline sm" type="button" id="layerFindStop" hidden>Stop</button>
+                  <a class="btn link" href="#/detections">Detections</a>
+                  <a class="btn link" href="#/data/reports">Reports</a>
                 </div>
               </div>
             </div>
@@ -234,12 +271,29 @@
           <div class="callout map-note" id="mapNote" hidden></div>
         </section>
 
-        <!-- Sensors -->
+        <!-- Animals: what people follow, like the entities of Protect -->
+        <section class="view" id="view-animals" hidden>
+          <div class="page-header">
+            <div>
+              <h1>Animals</h1>
+              <p>The animals that carry a sensor, with where and when they were last seen</p>
+            </div>
+            <div class="page-actions">
+              <button class="btn outline" type="button" id="animalsRefresh">Refresh</button>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="callout" id="animalsNote" hidden></div>
+            <div class="card" id="animalsTable"></div>
+          </div>
+        </section>
+
+        <!-- Sensors: the technical source behind the animals, like the devices of Protect -->
         <section class="view" id="view-sensors" hidden>
           <div class="page-header">
             <div>
               <h1>Sensors</h1>
-              <p>Collars and other borne sensors that send readings to WildlifeNL</p>
+              <p>The collars and other sensors that send the readings, each with the animal it is on</p>
             </div>
             <div class="page-actions">
               <button class="btn outline" type="button" id="sensorsRefresh">Refresh</button>
@@ -258,7 +312,7 @@
           </div>
         </section>
 
-        <!-- One sensor -->
+        <!-- One animal or one sensor: the same data, led by the one the address names -->
         <section class="view" id="view-sensor" hidden>
           <div class="page-header">
             <div>
@@ -274,6 +328,7 @@
               </select>
               <a class="btn outline" id="sensorOnMap"><svg class="icon"><use href="#i-pin" /></svg>Show on map</a>
               <a class="btn outline" id="sensorExplore"><svg class="icon"><use href="#i-chart" /></svg>Data explorer</a>
+              <a class="btn outline" id="sensorOther" hidden></a>
               <button class="btn outline" type="button" id="sensorRefresh">Refresh</button>
               <button class="btn outline" type="button" id="sensorKeep" hidden></button>
             </div>
@@ -283,7 +338,7 @@
             <div class="card-grid">
               <div class="card stack"><h2><svg class="icon"><use href="#i-sensor" /></svg>Sensor</h2><dl class="facts" id="sensorFacts"></dl></div>
               <div class="card stack"><h2>Latest</h2><dl class="facts" id="sensorLatest"></dl></div>
-              <div class="card stack"><h2>Animal</h2><dl class="facts" id="sensorAnimal"></dl></div>
+              <div class="card stack" id="sensorAnimalCard"><h2><svg class="icon"><use href="#i-animal" /></svg>Animal</h2><dl class="facts" id="sensorAnimal"></dl></div>
             </div>
             <div class="card map-card">
               <div class="card-bar">
@@ -305,7 +360,7 @@
           <div class="page-header">
             <div>
               <h1>Data explorer</h1>
-              <p>The measurements of the sensors over time, as WildlifeNL holds them</p>
+              <p>The measurements of the animals over time, as their sensors sent them to WildlifeNL</p>
             </div>
             <div class="page-actions">
               <button class="btn outline" type="button" id="exploreExport"><svg class="icon"><use href="#i-download" /></svg>Export</button>
@@ -313,7 +368,7 @@
           </div>
           <div class="filter-row">
             <div class="field"><span>Metrics</span><div id="exploreMetrics"></div></div>
-            <div class="field"><span>Sensors</span><div id="exploreSensors"></div></div>
+            <div class="field"><span>Animals</span><div id="exploreSensors"></div></div>
             <label class="field">
               <span>Range</span>
               <select id="exploreRange">
@@ -342,7 +397,7 @@
             <div class="empty-state" id="exploreEmpty">
               <svg class="icon"><use href="#i-chart" /></svg>
               <strong>Choose a metric to start</strong>
-              <span>Pick one or more sensors to compare. Each metric gets its own chart.</span>
+              <span>Pick one or more animals to compare. Each metric gets its own chart.</span>
             </div>
             <div class="stack" id="exploreCharts"></div>
             <div class="card" id="exploreTable" hidden></div>
@@ -359,7 +414,7 @@
             <div class="page-actions">
               <span class="hint" id="detectionsProgress"></span>
               <button class="btn outline" type="button" id="detectionsStop" hidden>Stop</button>
-              <a class="btn outline" href="#/map?layers=detections"><svg class="icon"><use href="#i-map" /></svg>Find detectors on the map</a>
+              <a class="btn outline" href="#/map?layers=detectors"><svg class="icon"><use href="#i-map" /></svg>Find detectors on the map</a>
               <button class="btn outline icon" type="button" id="detectionsRefresh" aria-label="Refresh" title="Refresh"><svg class="icon"><use href="#i-refresh" /></svg></button>
             </div>
           </div>
@@ -372,6 +427,42 @@
           <div class="page-body">
             <div class="callout" id="detectionsNote" hidden></div>
             <div class="card" id="detectionsTable"></div>
+          </div>
+        </section>
+
+        <!-- A list of records of one kind, and one record: every kind without a page of its own -->
+        <section class="view" id="view-records" hidden>
+          <div class="page-header">
+            <div>
+              <h1 id="recordsTitle"></h1>
+              <p id="recordsDescription"></p>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="callout" id="recordsNote" hidden></div>
+            <div class="card" id="recordsTable"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-record" hidden>
+          <div class="page-header">
+            <div>
+              <h1 id="recordTitle"></h1>
+              <p id="recordSubtitle"></p>
+            </div>
+            <div class="page-actions">
+              <a class="btn outline" id="recordBack"></a>
+              <a class="btn outline" id="recordOnMap" hidden><svg class="icon"><use href="#i-pin" /></svg>Show on map</a>
+              <button class="btn outline" type="button" id="recordCopy">Copy JSON</button>
+            </div>
+          </div>
+          <div class="page-body">
+            <div class="callout" id="recordNote" hidden></div>
+            <div class="card-grid wide">
+              <div class="card stack"><dl class="facts" id="recordFacts"></dl></div>
+              <div class="card map-card" id="recordMapCard" hidden><div class="map" id="recordMap"></div></div>
+            </div>
+            <div class="stack" id="recordExtra"></div>
           </div>
         </section>
 
@@ -407,7 +498,7 @@
           <div class="page-body narrow">
             <div class="card stack">
               <h2>What this is</h2>
-              <p>WildlifeNL Protect shows the data the WildlifeNL platform holds: the collars and other sensors on animals, their positions and measurements, and the detections of camera traps.</p>
+              <p>WildlifeNL Protect shows the data the WildlifeNL platform holds: the animals that carry a collar or another sensor, their positions and measurements, the detections of camera traps, the reports people make and the areas all of this happens in.</p>
               <p>Smart Parks made it to see that the data Smart Parks Protect sends to WildlifeNL arrives, and to give partners a quick look at that data. It only reads; it changes nothing in WildlifeNL.</p>
               <p>The app runs in your browser and talks directly to WildlifeNL. What you see depends on the roles of your WildlifeNL account.</p>
             </div>
@@ -415,7 +506,8 @@
               <h2>Pages</h2>
               <dl class="facts">
                 <dt><a href="#/map">Live map</a></dt><dd>Where the animals with a sensor are now, with their tracks.</dd>
-                <dt><a href="#/sensors">Sensors</a></dt><dd>Every sensor, and a page per sensor with all its data.</dd>
+                <dt><a href="#/animals">Animals</a></dt><dd>Every animal with a sensor, and a page per animal with its track and measurements.</dd>
+                <dt><a href="#/sensors">Sensors</a></dt><dd>The sensors behind the animals, and where a sensor is added by its ID.</dd>
                 <dt><a href="#/detections">Detections</a></dt><dd>What camera traps and other sensors saw around a point.</dd>
                 <dt><a href="#/explore">Data explorer</a></dt><dd>Measurements over time, as charts and as a table.</dd>
                 <dt><a href="#/database">Database</a></dt><dd>What WildlifeNL stores and how it hangs together.</dd>
@@ -460,7 +552,7 @@
     </div>
 
     <dialog class="search" id="searchDialog" aria-label="Search">
-      <input type="search" id="searchInput" placeholder="Search a sensor, an animal or a page…" autocomplete="off" spellcheck="false" />
+      <input type="search" id="searchInput" placeholder="Search an animal, a sensor or a page…" autocomplete="off" spellcheck="false" />
       <div class="search-results" id="searchResults" role="listbox"></div>
       <div class="search-foot"><span><kbd>↑</kbd><kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></div>
     </dialog>

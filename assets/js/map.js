@@ -50,7 +50,8 @@ const GREEN = "#52735E";
 const MAX_TRACK_DOTS = 2000;
 /** Protect's value: markers group when they would overlap, not before. */
 const CLUSTER_RADIUS_PX = 28;
-const CLICKABLE = ["sensors", "sensor-clusters", "detectors", "track-points"];
+/** The layers a click can hit, the one on top first. */
+const CLICKABLE = ["sensors", "sensor-clusters", "detectors", "reports", "track-points", "areas"];
 
 /** One colour per track, in the order Protect uses, and a lighter set of the same hues for a
  * dark ground. A track is known by its slot, so it keeps its hue when the ground changes. */
@@ -119,7 +120,10 @@ function collection(features) {
 // rounded square, Protect's shape for devices, and a detector is a diamond, its shape for
 // events.
 const DETECTOR_ICON = "camera_trap";
+/** A report is drawn as a diamond with the icon of its species, in the sand of a warning. */
+const REPORT_PREFIX = "report-";
 const MARKER_COLOURS = { normal: GREEN, selected: "#2563EB" };
+const REPORT_COLOUR = "#B8923F";
 const SELECTED_HALO = "rgba(37, 99, 235, 0.28)";
 const iconTexts = new Map();
 
@@ -140,13 +144,16 @@ function iconText(name) {
 }
 
 async function markerImage(id) {
-  const [, name, state] = id.split(":");
+  const [, full, state] = id.split(":");
+  const report = full.startsWith(REPORT_PREFIX);
+  const name = report ? full.slice(REPORT_PREFIX.length) : full;
+  const diamond = report || name === DETECTOR_ICON;
   const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
-  const colour = MARKER_COLOURS[state] || GREEN;
+  const colour = state === "selected" ? MARKER_COLOURS.selected : report ? REPORT_COLOUR : GREEN;
   if (state === "selected") {
     // the halo fills the image; the marker itself is drawn smaller inside it
     ctx.fillStyle = SELECTED_HALO;
@@ -162,7 +169,7 @@ async function markerImage(id) {
   ctx.lineWidth = state === "selected" ? 7 : 5;
   ctx.beginPath();
   if (name === "sensor") ctx.roundRect(4, 4, size - 8, size - 8, 10);
-  else if (name === DETECTOR_ICON) {
+  else if (diamond) {
     ctx.moveTo(size / 2, 3);
     ctx.lineTo(size - 3, size / 2);
     ctx.lineTo(size / 2, size - 3);
@@ -177,7 +184,7 @@ async function markerImage(id) {
       const picture = new Image(size, size);
       picture.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text.replace(/currentColor/g, colour))}`;
       await picture.decode();
-      const inset = name === DETECTOR_ICON ? 18 : 14;
+      const inset = diamond ? 18 : 14;
       ctx.drawImage(picture, inset, inset, size - inset * 2, size - inset * 2);
     } catch {
       /* the ring alone still marks the place */
@@ -319,6 +326,7 @@ export class MapView extends BaseMap {
     this.ordered = [];
     this.describe = () => ["", []];
     this.showTrack = false;
+    this.area = [];
     if (!this.map) return;
     this.map.on("click", "points", (event) => {
       const feature = event.features && event.features[0];
@@ -343,6 +351,13 @@ export class MapView extends BaseMap {
     this.draw();
   }
 
+  /** Draws the outline of an area, `{lat, lng}` points, and shows it whole. */
+  setArea(points) {
+    this.area = points;
+    this.draw();
+    this.fit(points);
+  }
+
   sources() {
     const ordered = [...this.points].sort((a, b) => (a.t || 0) - (b.t || 0));
     this.ordered = ordered;
@@ -350,12 +365,15 @@ export class MapView extends BaseMap {
     return {
       points: collection(ordered.map((p, index) => pointFeature(p.lng, p.lat, { latest: index === last ? 1 : 0, index }))),
       track: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.showTrack && ordered.length > 1 ? ordered.map((p) => [p.lng, p.lat]) : [] } },
+      area: collection(this.area.length > 2 ? [polygonFeature(this.area, {})] : []),
     };
   }
 
   layers(night) {
     const colour = night ? "#90ae9b" : GREEN;
     return [
+      { id: "area-fill", type: "fill", source: "area", paint: { "fill-color": colour, "fill-opacity": 0.12 } },
+      { id: "area-line", type: "line", source: "area", paint: { "line-color": colour, "line-width": 2 } },
       { id: "track", type: "line", source: "track", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": colour, "line-width": 2, "line-opacity": 0.85 } },
       {
         id: "points",
@@ -373,20 +391,37 @@ export class MapView extends BaseMap {
   }
 }
 
-/** The live map: a labelled marker per sensor, a coloured track per chosen sensor and the
- * detections. The page hears about clicks through `onSensor`, `onTrackPoint` and `onNothing`. */
+/** The middle of an outline, good enough to hang a name on. */
+function middleOf(points) {
+  const sum = points.reduce((acc, p) => ({ lat: acc.lat + p.lat, lng: acc.lng + p.lng }), { lat: 0, lng: 0 });
+  return { lat: sum.lat / points.length, lng: sum.lng / points.length };
+}
+
+function polygonFeature(points, properties) {
+  const ring = points.map((p) => [p.lng, p.lat]);
+  if (ring.length) ring.push(ring[0]);
+  return { type: "Feature", properties, geometry: { type: "Polygon", coordinates: [ring] } };
+}
+
+/**
+ * The live map. It draws what the page gives it and tells the page what was clicked:
+ * - sensors: a marker with the icon of the species, grouped into a disc with a count where
+ *   they would overlap
+ * - detectors and reports: diamonds, Protect's shape for events
+ * - areas: the outlines of living labs and zones
+ * - tracks, the visits of an area as discs, and the measuring line
+ * Every item carries `selected`; the page hears `onPick(kind, id)` and `onNothing()`.
+ */
 export class LiveMap extends BaseMap {
   /** `describePoint(track, point)` gives `[title, lines]` for the popup of a track point. */
-  constructor(container, { onSensor, onDetector, onNothing, describePoint, onMeasure }) {
+  constructor(container, { onPick, onNothing, describePoint, onMeasure }) {
     super(container, "bottom-right");
     this.terrain = loadTerrain();
     if (this.map && this.terrain) this.map.setPitch(TERRAIN_PITCH);
     this.measuring = false;
     this.measure = [];
-    this.sensors = [];
+    this.items = { sensors: [], detectors: [], reports: [], areas: [], visits: [] };
     this.tracks = [];
-    this.detectors = [];
-    this.selected = "";
     this.making = new Set();
     if (!this.map) return;
     this.map.on("click", async (event) => {
@@ -394,15 +429,17 @@ export class LiveMap extends BaseMap {
       const hits = this.map.queryRenderedFeatures(event.point, { layers: CLICKABLE.filter((id) => this.map.getLayer(id)) });
       const hit = hits[0];
       if (!hit) return onNothing();
-      if (hit.layer.id === "sensors") return onSensor(hit.properties.id);
       if (hit.layer.id === "sensor-clusters") {
         // a group opens: zoom in until its sensors stand apart
         const zoom = await this.map.getSource("sensors").getClusterExpansionZoom(hit.properties.cluster_id);
         return this.map.easeTo({ center: hit.geometry.coordinates, zoom: zoom + 0.5, duration: 500 });
       }
-      if (hit.layer.id === "detectors") return onDetector(hit.properties.id);
-      const track = this.tracks[hit.properties.track];
-      if (track) this.popup(hit.geometry.coordinates, popupHtml(...describePoint(track, track.points[hit.properties.point])));
+      if (hit.layer.id === "track-points") {
+        const track = this.tracks[hit.properties.track];
+        if (track) this.popup(hit.geometry.coordinates, popupHtml(...describePoint(track, track.points[hit.properties.point])));
+        return;
+      }
+      onPick(hit.properties.kind, hit.properties.id);
     });
     for (const layer of CLICKABLE) this.pointer(layer);
   }
@@ -412,12 +449,18 @@ export class LiveMap extends BaseMap {
     return id === "sensors" ? { cluster: true, clusterRadius: CLUSTER_RADIUS_PX, clusterMaxZoom: 14 } : {};
   }
 
-  /** Draws, after making the marker images the sensors need; a style change drops them. */
+  markerOf(kind, item) {
+    const name = kind === "detectors" ? DETECTOR_ICON : kind === "reports" ? `${REPORT_PREFIX}${item.icon}` : item.icon;
+    return markerId(name, item.selected ? "selected" : "normal");
+  }
+
+  /** Draws, after making the marker images that are needed; a style change drops them. */
   draw() {
     if (!this.map || !this.ready) return;
-    const needed = [...new Set([...this.sensors.map((s) => markerId(s.icon, s.id === this.selected ? "selected" : "normal")), ...this.detectors.map((d) => markerId(DETECTOR_ICON, d.id === this.selected ? "selected" : "normal"))])];
-    const missing = needed.filter((id) => !this.map.hasImage(id) && !this.making.has(id));
-    for (const id of missing) {
+    const needed = new Set();
+    for (const kind of ["sensors", "detectors", "reports"]) for (const item of this.items[kind]) needed.add(this.markerOf(kind, item));
+    for (const id of needed) {
+      if (this.map.hasImage(id) || this.making.has(id)) continue;
       this.making.add(id);
       markerImage(id).then((image) => {
         this.making.delete(id);
@@ -429,26 +472,19 @@ export class LiveMap extends BaseMap {
     super.draw();
   }
 
-  /** @param {{id:string,name:string,icon:string,lat:number,lng:number}[]} sensors */
-  setSensors(sensors) {
-    this.sensors = sensors;
-    this.draw();
-  }
-
-  setSelected(id) {
-    this.selected = id || "";
+  /**
+   * What one layer shows. `kind` is `sensors`, `detectors` or `reports` (items
+   * `{id, name, icon, lat, lng, selected}`), `areas` (`{id, name, points, selected}`) or
+   * `visits` (`{lat, lng, count}`).
+   */
+  setItems(kind, items) {
+    this.items[kind] = items;
     this.draw();
   }
 
   /** @param {{id:string,name:string,slot:number,points:{lat:number,lng:number,t:number}[]}[]} tracks */
   setTracks(tracks) {
     this.tracks = tracks;
-    this.draw();
-  }
-
-  /** @param {{id:string,name:string,lat:number,lng:number}[]} detectors */
-  setDetectors(detectors) {
-    this.detectors = detectors;
     this.draw();
   }
 
@@ -470,7 +506,19 @@ export class LiveMap extends BaseMap {
 
   sources() {
     const colours = nightMap(this.basemap) ? TRACK_COLORS_NIGHT : TRACK_COLORS;
+    // an item joins the map once its marker image is made, a moment after the first draw
+    const markers = (kind) =>
+      collection(
+        this.items[kind]
+          .map((item) => ({ item, marker: this.markerOf(kind, item) }))
+          .filter(({ marker }) => this.map.hasImage(marker))
+          .map(({ item, marker }) => pointFeature(item.lng, item.lat, { kind, id: item.id, name: item.name, selected: item.selected ? 1 : 0, marker })),
+      );
+    const most = Math.max(1, ...this.items.visits.map((v) => v.count));
     return {
+      areas: collection(this.items.areas.filter((a) => a.points.length > 2).map((a) => polygonFeature(a.points, { kind: "areas", id: a.id, selected: a.selected ? 1 : 0 }))),
+      "area-names": collection(this.items.areas.filter((a) => a.points.length > 2).map((a) => ({ ...middleOf(a.points), name: a.name })).map((a) => pointFeature(a.lng, a.lat, { name: a.name }))),
+      visits: collection(this.items.visits.map((v) => pointFeature(v.lng, v.lat, { share: Math.sqrt(v.count / most) }))),
       "track-lines": collection(
         this.tracks.filter((t) => t.points.length > 1).map((t) => ({ type: "Feature", properties: { color: colours[t.slot] }, geometry: { type: "LineString", coordinates: t.points.map((p) => [p.lng, p.lat]) } })),
       ),
@@ -483,49 +531,47 @@ export class LiveMap extends BaseMap {
           return dots;
         }),
       ),
-      detectors: collection(
-        this.detectors
-          .map((d) => ({ d, marker: markerId(DETECTOR_ICON, d.id === this.selected ? "selected" : "normal") }))
-          .filter(({ marker }) => this.map.hasImage(marker))
-          .map(({ d, marker }) => pointFeature(d.lng, d.lat, { id: d.id, name: d.name, selected: d.id === this.selected ? 1 : 0, marker })),
-      ),
       "measure-line": collection(this.measure.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.measure.map((p) => [p.lng, p.lat]) } }] : []),
       "measure-points": collection(this.measure.map((p) => pointFeature(p.lng, p.lat, {}))),
-      // a sensor joins the map once its marker image is made, a moment after the first draw
-      sensors: collection(
-        this.sensors
-          .map((s) => ({ s, marker: markerId(s.icon, s.id === this.selected ? "selected" : "normal") }))
-          .filter(({ marker }) => this.map.hasImage(marker))
-          .map(({ s, marker }) => pointFeature(s.lng, s.lat, { id: s.id, name: s.name, selected: s.id === this.selected ? 1 : 0, marker })),
-      ),
+      reports: markers("reports"),
+      detectors: markers("detectors"),
+      sensors: markers("sensors"),
     };
   }
 
   layers(night) {
     const selected = ["==", ["get", "selected"], 1];
+    const text = { "text-color": night ? "#e6ece8" : "#1f2a24", "text-halo-color": night ? "#121917" : "#ffffff", "text-halo-width": 1.2 };
+    const marker = (id) => ({
+      id,
+      type: "symbol",
+      source: id,
+      layout: {
+        "icon-image": ["get", "marker"],
+        "icon-size": ["case", selected, 1.25, 0.9],
+        "icon-allow-overlap": true,
+        "text-field": ["get", "name"],
+        "text-font": FONT,
+        "text-size": 11,
+        "text-offset": [0, 1.8],
+        "text-anchor": "top",
+        "text-optional": true,
+        "text-max-width": 12,
+      },
+      paint: text,
+    });
+    const green = night ? "#90ae9b" : GREEN;
     return [
+      { id: "areas", type: "fill", source: "areas", paint: { "fill-color": green, "fill-opacity": ["case", selected, 0.28, 0.12] } },
+      { id: "area-lines", type: "line", source: "areas", paint: { "line-color": green, "line-width": ["case", selected, 3, 1.5] } },
+      { id: "area-names", type: "symbol", source: "area-names", layout: { "text-field": ["get", "name"], "text-font": FONT, "text-size": 12, "text-max-width": 10 }, paint: { ...text, "text-color": night ? "#cfe0d6" : "#2F4A3A" } },
+      { id: "visits", type: "circle", source: "visits", paint: { "circle-radius": ["interpolate", ["linear"], ["get", "share"], 0, 4, 1, 26], "circle-color": "#5C7FA3", "circle-opacity": 0.45, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } },
       { id: "track-lines", type: "line", source: "track-lines", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-opacity": 0.9 } },
       { id: "track-points", type: "circle", source: "track-points", paint: { "circle-radius": 3.5, "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": 2 } },
       { id: "measure-line", type: "line", source: "measure-line", paint: { "line-color": night ? "#ffffff" : "#1f2a24", "line-width": 2, "line-dasharray": [2, 2] } },
       { id: "measure-points", type: "circle", source: "measure-points", paint: { "circle-radius": 4, "circle-color": "#ffffff", "circle-stroke-color": night ? "#ffffff" : "#1f2a24", "circle-stroke-width": 2 } },
-      {
-        id: "detectors",
-        type: "symbol",
-        source: "detectors",
-        layout: {
-          "icon-image": ["get", "marker"],
-          "icon-size": ["case", selected, 1.25, 0.9],
-          "icon-allow-overlap": true,
-          "text-field": ["get", "name"],
-          "text-font": FONT,
-          "text-size": 11,
-          "text-offset": [0, 1.8],
-          "text-anchor": "top",
-          "text-optional": true,
-          "text-max-width": 12,
-        },
-        paint: { "text-color": night ? "#e6ece8" : "#1f2a24", "text-halo-color": night ? "#121917" : "#ffffff", "text-halo-width": 1.2 },
-      },
+      marker("reports"),
+      marker("detectors"),
       {
         id: "sensor-clusters",
         type: "circle",
@@ -541,25 +587,7 @@ export class LiveMap extends BaseMap {
         layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 12, "text-font": FONT },
         paint: { "text-color": "#ffffff" },
       },
-      {
-        id: "sensors",
-        type: "symbol",
-        source: "sensors",
-        filter: ["!", ["has", "point_count"]],
-        layout: {
-          "icon-image": ["get", "marker"],
-          "icon-size": ["case", selected, 1.25, 0.9],
-          "icon-allow-overlap": true,
-          "text-field": ["get", "name"],
-          "text-font": FONT,
-          "text-size": 11,
-          "text-offset": [0, 1.8],
-          "text-anchor": "top",
-          "text-optional": true,
-          "text-max-width": 12,
-        },
-        paint: { "text-color": night ? "#e6ece8" : "#1f2a24", "text-halo-color": night ? "#121917" : "#ffffff", "text-halo-width": 1.2 },
-      },
+      { ...marker("sensors"), filter: ["!", ["has", "point_count"]] },
     ];
   }
 }

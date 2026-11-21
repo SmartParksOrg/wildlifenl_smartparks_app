@@ -105,6 +105,11 @@ export function sensorById(id) {
   return (state.sensors || []).find((sensor) => sensor.id === id) || null;
 }
 
+/** The sensor an animal carries, by the ID of the animal. */
+export function sensorByAnimal(animalId) {
+  return (state.sensors || []).find((sensor) => sensor.animal && String(sensor.animal.ID) === String(animalId)) || null;
+}
+
 /** Remembers a sensor ID typed by the user. */
 export function addSensor(id) {
   const ids = addedIds();

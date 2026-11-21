@@ -116,8 +116,9 @@ test("autoBucket widens with the period", () => {
 });
 
 test("parseHash and buildHash agree", () => {
-  assert.deepEqual(parseHash("#/sensors/70B3%2F1?range=168&track=1"), { page: "sensors", id: "70B3/1", query: { range: "168", track: "1" } });
-  assert.deepEqual(parseHash(""), { page: "", id: "", query: {} });
+  assert.deepEqual(parseHash("#/sensors/70B3%2F1?range=168&track=1"), { page: "sensors", id: "70B3/1", sub: "", query: { range: "168", track: "1" } });
+  assert.deepEqual(parseHash(""), { page: "", id: "", sub: "", query: {} });
+  assert.deepEqual(parseHash("#/data/species/abc-1"), { page: "data", id: "species", sub: "abc-1", query: {} });
   assert.equal(buildHash("sensors", "70B3/1", { range: 168, empty: "" }), "#/sensors/70B3%2F1?range=168");
   assert.equal(buildHash("map"), "#/map");
   const hash = buildHash("explore", "", { sensors: "A,B", metrics: "temperature" });

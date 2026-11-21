@@ -9,21 +9,26 @@ import * as databasePage from "./pages/database.js";
 import * as detectionsPage from "./pages/detections.js";
 import * as explorePage from "./pages/explore.js";
 import * as mapPage from "./pages/map.js";
+import * as recordsPage from "./pages/records.js";
 import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
 import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
 import { resetDetections } from "./detections.js";
+import { TYPES, canList, recordHash, resetRecords } from "./records.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
 
 /** The section of each page, its module and the navigation entry it lights up. */
 const PAGES = {
   map: { view: "map", module: mapPage, nav: "map", title: "Live map" },
+  animals: { view: "animals", module: sensorsPage, nav: "animals", title: "Animals" },
+  animal: { view: "sensor", module: sensorPage, nav: "animals", title: "Animal" },
   sensors: { view: "sensors", module: sensorsPage, nav: "sensors", title: "Sensors" },
   sensor: { view: "sensor", module: sensorPage, nav: "sensors", title: "Sensor" },
   explore: { view: "explore", module: explorePage, nav: "explore", title: "Data explorer" },
   detections: { view: "detections", module: detectionsPage, nav: "detections", title: "Detections" },
   database: { view: "database", module: databasePage, nav: "database", title: "Database" },
+  data: { view: "records", module: recordsPage, nav: "", title: "Records" },
   about: { view: "about", module: aboutPage, nav: "about", title: "About" },
   account: { view: "account", module: accountPage, nav: "account", title: "Account" },
 };
@@ -190,18 +195,24 @@ function wireAuth() {
 function route() {
   if (!account.session) return;
   const parsed = parseHash(location.hash);
-  const key = parsed.page === "sensors" && parsed.id ? "sensor" : parsed.page in PAGES && parsed.page !== "sensor" ? parsed.page : "map";
+  // an animal and a sensor each have a list and, with an ID in the address, a page
+  const single = { animals: "animal", sensors: "sensor" }[parsed.page];
+  const key = single && parsed.id ? single : parsed.page in PAGES && !["animal", "sensor"].includes(parsed.page) ? parsed.page : "map";
   const page = PAGES[key];
-  for (const other of Object.values(PAGES)) $(`view-${other.view}`).hidden = other !== page;
+  // a record page belongs under the navigation entry of its kind
+  const type = key === "data" ? TYPES[parsed.id] || TYPES.species : null;
+  const nav = type ? type.nav : page.nav;
+  for (const other of Object.values(PAGES)) $(`view-${other.view}`).hidden = other.view !== page.view;
+  $("view-record").hidden = true; // the records page shows it for one record
   $("content").classList.toggle("bleed", key === "map");
   $("content").scrollTop = 0;
   for (const link of document.querySelectorAll(".nav-item")) {
-    const active = link.dataset.view === page.nav;
+    const active = link.dataset.view === nav;
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
-  document.title = `${key === "sensor" ? parsed.id : page.title} · ${APP_NAME}`;
+  document.title = `${key === "sensor" ? parsed.id : type ? type.plural : page.title} · ${APP_NAME}`;
   Promise.resolve(page.module.show(parsed)).catch((error) => {
     const text = explain(error);
     if (text) toast(text, true);
@@ -212,6 +223,9 @@ function drawAccount() {
   const { session } = account;
   $("sidebarUser").textContent = session.email || "Account";
   const host = new URL(session.baseUrl).host;
+  // an entry of the navigation is only there when the account may read something behind it
+  for (const link of document.querySelectorAll(".nav-item[data-type]")) link.hidden = !canList(link.dataset.type);
+  for (const section of document.querySelectorAll(".nav-section")) section.hidden = ![...section.querySelectorAll(".nav-item")].some((link) => !link.hidden);
   const chip = $("serverChip");
   chip.textContent = host.startsWith("test-") ? "Test server" : host.startsWith("live-") ? "" : host;
   chip.title = `Connected to ${host}`;
@@ -284,8 +298,9 @@ function drawSearch() {
 async function openSearch() {
   if (!account.session || $("searchDialog").open) return;
   const pages = Object.entries(PAGES)
-    .filter(([key]) => key !== "sensor")
-    .map(([key, page]) => ({ label: page.title, sub: "Page", icon: "search", href: buildHash(key) }));
+    .filter(([key]) => !["animal", "sensor", "data"].includes(key))
+    .map(([key, page]) => ({ label: page.title, sub: "Page", icon: "search", href: buildHash(key) }))
+    .concat(Object.entries(TYPES).filter(([type]) => canList(type)).map(([type, def]) => ({ label: def.plural, sub: "Page", icon: "search", href: recordHash(type) })));
   search.items = pages;
   search.active = 0;
   $("searchInput").value = "";
@@ -293,7 +308,11 @@ async function openSearch() {
   drawSearch();
   try {
     const sensors = await loadSensors();
-    search.items = [...sensors.map((s) => ({ label: s.name, sub: [s.name !== s.id ? s.id : "", s.species, "Sensor"].filter(Boolean).join(" · "), icon: "sensor", href: buildHash("sensors", s.id) })), ...pages];
+    // an animal is found by its name, its species or the ID of its sensor
+    search.items = [
+      ...sensors.map((s) => (s.animal ? { label: s.name, sub: [s.species, `sensor ${s.id}`, "Animal"].filter(Boolean).join(" · "), icon: "animal", href: buildHash("animals", s.animal.ID) } : { label: s.id, sub: "Sensor without an animal", icon: "sensor", href: buildHash("sensors", s.id) })),
+      ...pages,
+    ];
     drawSearch();
   } catch (error) {
     explain(error);
@@ -356,6 +375,7 @@ async function start() {
     if ($("searchDialog").open) $("searchDialog").close();
     resetStore();
     resetDetections();
+    resetRecords();
     for (const page of Object.values(PAGES)) page.module.reset();
     showAuth(message);
   };

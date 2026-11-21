@@ -52,7 +52,7 @@ async function render(metrics, ids) {
   const ready = metrics.length > 0 && ids.length > 0;
   const empty = $("exploreEmpty");
   empty.hidden = ready;
-  empty.querySelector("strong").textContent = metrics.length ? "Choose a sensor" : "Choose a metric to start";
+  empty.querySelector("strong").textContent = metrics.length ? "Choose an animal" : "Choose a metric to start";
   $("exploreBucketHint").textContent = "";
   if (!ready) return;
 
@@ -104,7 +104,7 @@ async function render(metrics, ids) {
     chart.set({ unit, series });
     charts.push(chart);
   }
-  if (without.length) note($("exploreNote"), `No ${without.join(", ")} data for the chosen sensors in this period.`, "warn");
+  if (without.length) note($("exploreNote"), `No ${without.join(", ")} data for the chosen animals in this period.`, "warn");
 
   // the table view of the charts: the same numbers, one row per moment and sensor
   $("exploreTable").hidden = rows.size === 0;
@@ -113,12 +113,12 @@ async function render(metrics, ids) {
 
 function wire() {
   metricPicker = new MultiPicker($("exploreMetrics"), { placeholder: "Choose metrics", noun: "metrics", onChange: () => navigate() });
-  sensorPicker = new MultiPicker($("exploreSensors"), { placeholder: "Choose sensors", noun: "sensors", max: PALETTE.length, onChange: () => navigate() });
+  sensorPicker = new MultiPicker($("exploreSensors"), { placeholder: "Choose animals", noun: "animals", max: PALETTE.length, onChange: () => navigate() });
   table = new DataTable($("exploreTable"), { filename: "wildlifenl-explore" });
   $("exploreRange").addEventListener("change", () => navigate());
   $("exploreBucket").addEventListener("change", () => navigate());
   $("exploreExport").addEventListener("click", () => {
-    if (!table.rows.length) return toast("Choose a metric and a sensor first");
+    if (!table.rows.length) return toast("Choose a metric and an animal first");
     download(`wildlifenl-explore-${fileStamp()}.csv`, toCsv(table.visibleRows(), table.columns), "text/csv");
   });
 }

@@ -3,6 +3,7 @@
 
 import { databaseModel } from "../lib.js";
 import { account, explain } from "../session.js";
+import { tableHash } from "../records.js";
 import { $, el, note } from "../ui.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -94,6 +95,7 @@ function drawDetail() {
   target.replaceChildren(
     el("h2", {}, [el("i", { class: `dot g${table.group}` }), table.label]),
     el("p", { text: table.description || "A kind of record in WildlifeNL." }),
+    tableHash(table.name) ? el("div", { class: "row" }, el("a", { class: "btn outline sm", href: tableHash(table.name), text: `Open the ${table.label.toLowerCase()}s in the app` })) : null,
     linked.length
       ? el("div", { class: "row" }, [el("span", { class: "hint", text: "Belongs together with" }), ...linked.map((other) => el("button", { class: "badge", type: "button", onclick: () => select(other.name) }, [el("i", { class: `dot g${other.group}` }), other.label]))])
       : null,
