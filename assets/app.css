@@ -2036,10 +2036,26 @@ button.badge:hover {
   .map-cards {
     top: 3.25rem;
     right: auto;
-    bottom: 0.5rem;
+    bottom: 2rem;
     width: min(20rem, calc(100% - 4rem));
     max-height: none;
     justify-content: flex-start;
+  }
+}
+
+/* A low screen, such as a phone held sideways: the tools at the top right and the buttons of
+   the map at the bottom right would meet. Zooming is done with two fingers there, so its two
+   buttons go. A panel takes the room that is left and scrolls. */
+@media (max-height: 480px) {
+  .live-map .maplibregl-ctrl-zoom-in,
+  .live-map .maplibregl-ctrl-zoom-out {
+    display: none;
+  }
+
+  .map-cards .object-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
   }
 }
 

@@ -680,14 +680,16 @@ function placeOf(kind, id) {
   return null;
 }
 
-/** A phone has room for one panel above the map. */
-const NARROW = window.matchMedia("(max-width: 767px)");
+/** A phone has room for one panel above the map, upright (narrow) or held sideways (low). */
+const NARROW = window.matchMedia("(max-width: 767px), (max-height: 480px)");
 
-/** Goes to a place. On a phone held upright the panels rise from the bottom, so the place is
- * put in the upper part of the map, where it stays in sight. */
+/** Goes to a place and keeps it in sight beside the panels. On a narrow screen held upright
+ * they rise from the bottom, so the place goes to the upper part of the map; held sideways
+ * they stand at the left, so it goes to the right. */
 function goTo(place) {
-  const upright = NARROW.matches && window.innerHeight > window.innerWidth;
-  map.flyTo(place, upright ? $("liveMap").clientHeight * 0.22 : 0);
+  if (!window.matchMedia("(max-width: 767px)").matches) return map.flyTo(place);
+  const upright = window.innerHeight > window.innerWidth;
+  map.flyTo(place, upright ? { up: $("liveMap").clientHeight * 0.22 } : { right: 160 });
 }
 
 async function select(kind, id, fly = false) {
@@ -822,7 +824,12 @@ function wire() {
     drawMeasure();
   });
 
-  $("mapLayersButton").addEventListener("click", () => showCard("layerPanel", $("layerPanel").hidden));
+  $("mapLayersButton").addEventListener("click", () => {
+    const opening = $("layerPanel").hidden;
+    // on a phone the layers take the place of the panel of what was picked
+    if (opening && NARROW.matches && selected.kind) select("", "");
+    showCard("layerPanel", opening);
+  });
   $("layerClose").addEventListener("click", () => showCard("layerPanel", false));
   for (const button of document.querySelectorAll("#layerTabs [role=tab]")) {
     button.addEventListener("click", () => {

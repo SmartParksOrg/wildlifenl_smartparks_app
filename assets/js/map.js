@@ -510,10 +510,10 @@ export class LiveMap extends BaseMap {
     this.draw();
   }
 
-  /** Goes to a place. `up` puts the place that many pixels above the middle of the map, for
-   * when a panel covers the lower part. */
-  flyTo(place, up = 0) {
-    if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600, offset: [0, -up] });
+  /** Goes to a place. `up` and `right` put the place that many pixels away from the middle of
+   * the map, for when a panel covers the lower or the left part. */
+  flyTo(place, { up = 0, right = 0 } = {}) {
+    if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600, offset: [right, -up] });
   }
 
   sources() {
