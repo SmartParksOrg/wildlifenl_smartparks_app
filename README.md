@@ -52,7 +52,7 @@ A list that exists for everyone and for yourself, such as Reports and My reports
 
 | To see | Role |
 | --- | --- |
-| The animals and their sensors | `herd-manager`; the readings of a sensor also `land-user`, `nature-area-manager` or `wildlife-manager` |
+| The animals and their sensors | `herd-manager` sees them all; `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map. The readings of a sensor also `land-user` |
 | Detections, reports from others, visits of a living lab | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Zones | `land-user` or `wildlife-manager` |
 | Experiments and everything under them | `researcher` |
@@ -90,7 +90,7 @@ Where a record names another one, the app links to it: an animal to its species 
 The map is laid out like the live map of Protect.
 
 - **Layers** (top left) opens a panel with a tab per kind: Animals, Sensors, People, Detectors, Events and Areas. Each tab has a search, a choice to group the rows or not, sorting by name or by last update, groups that fold, a tick per row and per group, and a line to show, hide, unfold or fold everything. Reset puts it all back.
-- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it.
+- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it. An area manager or wildlife manager, who may not list the herd's sensors, finds the animals with **Search this view**: every animal with a sensor whose last position is in the view and under 48 hours old. Found animals are remembered in the browser and are animals like any other from then on, with a page, a track and charts.
 - **Sensors** lists every sensor, to look at the data from the side of the sensor. A sensor on an animal is drawn as a sensor once you tick or pick it; until then its animal stands for it.
 - **People** are where the recreation app last recorded them, each with a track like an animal.
 - **Events** are the reports from people, the contacts between a person and an animal, and the alarms, grouped per kind.
@@ -109,7 +109,7 @@ A detection is a record that a camera trap or another detector saw animals of on
 
 WildlifeNL answers a detection query only within 10 km of a point and has no list of detectors, so the app has to look for them:
 
-- **Search this view** (under Layers on the live map, in the Detectors and Reports tabs) asks circle by circle until the view is covered, for detections and for reports, at a pace that stays under the API's limit of 120 requests a minute. Stop ends it.
+- **Search this view** (under Layers on the live map, in the Detectors and Events tabs) asks circle by circle until the view is covered, for detections and for reports, at a pace that stays under the API's limit of 120 requests a minute. Stop ends it.
 - **Places with detections are remembered** in the browser, per server. From then on the map and the list open with the detections of those places, which takes a request per detector area.
 - **The period** is set on the Detections page (the last 90 days at first) and also holds for the map. A search only finds detectors with a detection in that period, so choose a long period before the first search.
 

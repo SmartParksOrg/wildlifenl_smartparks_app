@@ -118,7 +118,13 @@ To offer another call: add an action to `ACTIONS`. To check by hand, sign in on 
 
 ## Sensors and readings
 
-`store.js` is the one place that knows which sensors exist. A sensor comes from `GET /borne-sensor-deployment/active/` (herd managers only) or from the IDs the user added, kept in `localStorage` under `wnl-sensors`. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
+`store.js` is the one place that knows which sensors exist. A sensor comes from one of three sources:
+
+- `GET /borne-sensor-deployment/active/`, which only herd managers may call.
+- The animals a search of the live map found (`addFound`), for an area manager or wildlife manager. `GET /animals/` answers with the animals whose last position is inside a circle and a period, each with its deployments; `sensorOfAnimal` in `lib.js` picks the sensor it carries. They are kept under `wnl-found-animals:{server}:{user}` without their readings.
+- The IDs the user added, kept under `wnl-sensors`.
+
+From there every page treats them alike. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
 
 The API has no "latest reading" call, no limit and no time filter: one request returns every reading of a sensor, uncompressed. On the test server a simulated sensor holds about 26,000 readings, 4.5 MB per request. Two things keep the app quick:
 
@@ -167,6 +173,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-session` | `localStorage` when "Keep me signed in" is on, else `sessionStorage` | API address, token, email, user ID, name, roles |
 | `wnl-theme` | `localStorage` | `light`, `dark` or `system` |
 | `wnl-sensors` | `localStorage` | The sensor IDs the user added by hand |
+| `wnl-found-animals:{server}:{user}` | `localStorage` | The animals a search of the live map found, each with the sensor it carries |
 | `wnl-basemap` | `localStorage` | The chosen base map |
 | `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
 | `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
@@ -194,7 +201,9 @@ A track draws every fix in its line but at most 2000 dots, and the popup of a po
 
 `GET /detections/` needs a centre and a radius of at most 10 km, and the API has no list of detectors. `detections.js` is the one module that deals with that; the live map and the Detections page both read from it and hear about changes through `onDetections`.
 
-- `searchBox` covers a box with a honeycomb of 10 km circles (`circleGrid` in `lib.js`) and asks them one by one. More than 300 circles are refused with a hint to zoom in.
+- `searchBox` covers a box with a honeycomb of circles (`circleGrid` in `lib.js`) and asks them one by one. More than 300 circles are refused with a hint to zoom in.
+- The API does not measure a radius over the ground: it takes a metre as 0.00001 degree in every direction (`models/Circle.go` in its source). Its 10 km is a circle of 0.1 degree, which in the Netherlands reaches 11 km north and south but under 7 km east and west. `circleGrid` and `coverPlaces` therefore work in degrees. Up to 2.4.0 they worked in metres, which left about an eighth of a searched view unasked.
+- A search of an area also asks `GET /animals/` for an account that may read animals but not list the deployments (`searchesAnimals`). It asks for the last 48 hours only: the API sends every reading of the asked period along with each animal. Animals move, so no places are remembered for them and the load of the known places leaves them out.
 - `searchCircle` spaces the requests 700 ms apart, about 85 a minute, under the API's default of 120 requests a minute per token (`RATE_LIMIT_MAX_REQUESTS` in the API's source). A `429` answer is waited out for 20 seconds and tried again.
 - Every place with a detection is kept in `localStorage` under `wnl-detection-places:{server}`, rounded to about 100 metres. `coverPlaces` turns those places into the fewest circles, and that is all `loadDetections` asks.
 - `detectorsOf` groups detections into detectors, one per `deploymentID` and place. The live map draws them as a diamond with a camera, Protect's shape for events.

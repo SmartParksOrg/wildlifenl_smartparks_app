@@ -1,15 +1,18 @@
 // The sensors this account works with and their readings, fetched once and kept in memory.
 //
-// A sensor comes from WildlifeNL's active deployments (which only herd managers may list) or
-// from the IDs the user added by hand, which are remembered in this browser.
+// A sensor comes from WildlifeNL's active deployments (which only herd managers may list),
+// from the animals a search of the live map found (for the managers who may not list the
+// deployments), or from the IDs the user added by hand. The last two are remembered in this
+// browser.
 
 import { SCOPES } from "./api.js";
-import { trackOf } from "./lib.js";
+import { sensorOfAnimal, trackOf } from "./lib.js";
 import { account, hasScope } from "./session.js";
 
 const ADDED_KEY = "wnl-sensors";
+const FOUND_KEY = "wnl-found-animals";
 
-/** @typedef {{id:string, name:string, animal:object|null, species:string, start:string, added:boolean, place:{lat:number,lng:number,t:number}|null}} Sensor */
+/** @typedef {{id:string, name:string, animal:object|null, species:string, start:string, added:boolean, found:boolean, place:{lat:number,lng:number,t:number}|null}} Sensor */
 
 const state = {
   /** @type {Sensor[]|null} */ sensors: null,
@@ -34,6 +37,22 @@ function saveAdded(ids) {
   localStorage.setItem(ADDED_KEY, JSON.stringify(ids));
 }
 
+/** The animals a search found belong to one account on one server. */
+function foundKey() {
+  return `${FOUND_KEY}:${new URL(account.session.baseUrl).host}:${account.session.userID}`;
+}
+
+/** The found animals as deployments `{sensorID, start, animal}`, the shape WildlifeNL lists
+ * the active deployments in. */
+function foundDeployments() {
+  try {
+    const list = JSON.parse(localStorage.getItem(foundKey()) || "[]");
+    return Array.isArray(list) ? list.filter((item) => item && typeof item.sensorID === "string" && item.animal) : [];
+  } catch {
+    return [];
+  }
+}
+
 function fromDeployment(deployment) {
   const animal = deployment.animal || null;
   const species = animal && animal.species ? animal.species.commonName || animal.species.name || "" : "";
@@ -46,6 +65,7 @@ function fromDeployment(deployment) {
     species,
     start: deployment.start || "",
     added: false,
+    found: false,
     // the animal's current location, until the sensor's own readings are loaded
     place: located ? { lat: location.latitude, lng: location.longitude, t: NaN } : null,
   };
@@ -64,9 +84,12 @@ async function fetchSensors() {
       state.listError = error.message;
     }
   }
+  for (const deployment of foundDeployments()) {
+    if (!byId.has(deployment.sensorID)) byId.set(deployment.sensorID, { ...fromDeployment(deployment), found: true });
+  }
   for (const id of addedIds()) {
     if (byId.has(id)) byId.get(id).added = true;
-    else byId.set(id, { id, name: id, animal: null, species: "", start: "", added: true, place: null });
+    else byId.set(id, { id, name: id, animal: null, species: "", start: "", added: true, found: false, place: null });
   }
   const sensors = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   for (const sensor of sensors) applyLoaded(sensor);
@@ -120,6 +143,27 @@ export function addSensor(id) {
 export function removeSensor(id) {
   saveAdded(addedIds().filter((other) => other !== id));
   state.sensors = null;
+}
+
+/** Remembers the animals a search of the live map found, each with the sensor it carries,
+ * so they are animals of this app like the ones a herd manager lists. An animal without a
+ * sensor has nothing to follow and is left out. Returns how many were taken. */
+export function addFound(animals) {
+  const byId = new Map(foundDeployments().map((deployment) => [deployment.sensorID, deployment]));
+  let taken = 0;
+  for (const animal of animals) {
+    const deployment = sensorOfAnimal(animal);
+    if (!deployment) continue;
+    // the animal without its deployments and their readings, which can be megabytes
+    const { borneSensorDeployments, ...rest } = animal;
+    byId.set(deployment.sensorID, { sensorID: deployment.sensorID, start: deployment.start || "", animal: rest });
+    taken++;
+  }
+  if (taken) {
+    localStorage.setItem(foundKey(), JSON.stringify([...byId.values()]));
+    state.sensors = null;
+  }
+  return taken;
 }
 
 /** All readings of a sensor and its track `{readings, track}`, fetched once. A failed fetch

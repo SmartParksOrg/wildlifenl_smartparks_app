@@ -5,30 +5,38 @@
 // WildlifeNL only answers within 10 km of a point and has no list of detectors, so an area is
 // searched circle by circle. Every place with a find is remembered in this browser, per
 // server, and from then on only those places are asked.
+//
+// A search also asks for the animals in the area, for the managers who may read animals but
+// not list the herd's sensors. Those go to store.js, which keeps the animals and sensors.
 
 import { SCOPES } from "./api.js";
 import { circleGrid, coverPlaces, toPoint, toTime } from "./lib.js";
 import { account, explain, hasScope } from "./session.js";
+import { addFound } from "./store.js";
 
 /** WildlifeNL answers such a query within at most this many metres of a point. */
 export const MAX_RADIUS_M = 10000;
-/** At most this many circles in one search: about four minutes at the pace below. */
+/** At most this many circles in one search. */
 const MAX_CIRCLES = 300;
 /** WildlifeNL allows 120 requests a minute per account; this leaves room for the other pages. */
 const PACE_MS = 700;
 const DAY = 24 * 3600 * 1000;
 const DEFAULT_DAYS = 90;
+/** An animal counts as in the area when its last position is this fresh. WildlifeNL sends
+ * every reading of the asked period along with an animal, so the period is kept short. */
+const ANIMAL_HOURS = 48;
 
 function dateText(t) {
   return new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-/** `found` holds every detection of the period by ID and `reports` every report; `progress`
- * is a line for the person while a search runs; `message` says how the last search ended
- * when it found nothing. */
+/** `found` holds every detection of the period by ID and `reports` every report; `animals`
+ * counts the animals the last search of an area found; `progress` is a line for the person
+ * while a search runs; `message` says how the last search ended when it found nothing. */
 export const detections = {
   found: new Map(),
   reports: new Map(),
+  animals: 0,
   from: dateText(Date.now() - DEFAULT_DAYS * DAY),
   to: dateText(Date.now()),
   busy: false,
@@ -37,11 +45,20 @@ export const detections = {
   loaded: false,
 };
 
-/** The two kinds of finds: where the API keeps them, who may ask, where they land. */
+/** The kinds of finds: where the API keeps them, who may ask, where they land. Detections
+ * and reports stay where they are, so their places are remembered and asked again. Animals
+ * move, so they are only asked when a person searches an area, and only for an account that
+ * cannot list the herd's sensors. */
 const KINDS = [
   { path: "detections", scope: SCOPES.detections, into: () => detections.found, places: "wnl-detection-places" },
   { path: "interactions", scope: SCOPES.reports, into: () => detections.reports, places: "wnl-report-places" },
+  { path: "animals", scope: SCOPES.animalsNear, moving: true },
 ];
+
+/** The kinds this account may ask; `area` says a person searches an area. */
+function kindsFor(area) {
+  return KINDS.filter((kind) => hasScope(kind.scope) && (!kind.moving || (area && !hasScope(SCOPES.deployments))));
+}
 
 const listeners = new Set();
 let run = 0;
@@ -71,7 +88,7 @@ function placesOf(name) {
 
 /** The places where a detector or a report was found before. */
 export function knownPlaces() {
-  return KINDS.flatMap((kind) => placesOf(kind.places));
+  return KINDS.filter((kind) => kind.places).flatMap((kind) => placesOf(kind.places));
 }
 
 /** Where a report happened: the place the person pointed at, else where the person stood. */
@@ -100,8 +117,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** One question about one circle, paced so a long search stays under the limit of the API;
  * a "slow down" answer is waited out and tried again. */
 async function ask(kind, centre, mine) {
-  const start = new Date(toTime(`${detections.from}T00:00`)).toISOString();
-  const end = new Date(toTime(`${detections.to}T23:59:59`)).toISOString();
+  const start = kind.moving ? new Date(Date.now() - ANIMAL_HOURS * 3600 * 1000).toISOString() : new Date(toTime(`${detections.from}T00:00`)).toISOString();
+  const end = kind.moving ? new Date().toISOString() : new Date(toTime(`${detections.to}T23:59:59`)).toISOString();
   for (let attempt = 0; attempt < 4 && mine === run; attempt++) {
     const pause = lastStart + PACE_MS - Date.now();
     lastStart = Math.max(Date.now(), lastStart + PACE_MS);
@@ -119,11 +136,12 @@ async function ask(kind, centre, mine) {
   return [];
 }
 
-async function search(centres, label) {
+async function search(centres, label, area = false) {
   const mine = ++run;
-  const kinds = KINDS.filter((kind) => hasScope(kind.scope));
+  const kinds = kindsFor(area);
   detections.busy = true;
   detections.message = "";
+  detections.animals = 0;
   let done = 0;
   try {
     for (const centre of centres) {
@@ -133,8 +151,11 @@ async function search(centres, label) {
       for (const kind of kinds) {
         const list = await ask(kind, centre, mine);
         if (mine !== run) return;
-        for (const item of list) kind.into().set(item.ID, item);
-        if (list.length) remember(kind, list);
+        if (kind.moving) detections.animals += addFound(list);
+        else {
+          for (const item of list) kind.into().set(item.ID, item);
+          if (list.length) remember(kind, list);
+        }
       }
       done++;
     }
@@ -145,7 +166,7 @@ async function search(centres, label) {
   if (mine !== run) return;
   detections.busy = false;
   detections.progress = "";
-  if (!detections.found.size && !detections.reports.size && !detections.message) {
+  if (!detections.found.size && !detections.reports.size && !detections.animals && !detections.message) {
     detections.message = knownPlaces().length ? "Nothing in this period at the known places. Choose a longer period, or search another part of the map." : "Nothing found there. Search another part of the map; the app remembers where it finds detectors and reports.";
   }
   changed();
@@ -177,13 +198,19 @@ export function setPeriod(from, to) {
   loadDetections(true);
 }
 
+/** Whether a search of an area also looks for animals for this account. */
+export function searchesAnimals() {
+  return kindsFor(true).some((kind) => kind.moving);
+}
+
 /** Searches the box `{south, west, north, east}` circle by circle. Returns a text when the
  * box is too large to search. */
 export function searchBox(box) {
   const centres = circleGrid(box, MAX_RADIUS_M);
-  if (centres.length > MAX_CIRCLES) return `This view needs ${centres.length} searches of 10 km each. Zoom in until it needs at most ${MAX_CIRCLES}, which takes about four minutes.`;
+  const minutes = Math.ceil((MAX_CIRCLES * kindsFor(true).length * PACE_MS) / 60000);
+  if (centres.length > MAX_CIRCLES) return `This view needs ${centres.length} searches. Zoom in until it needs at most ${MAX_CIRCLES}, which takes about ${minutes} minutes.`;
   detections.loaded = true;
-  search(centres, "Searching area");
+  search(centres, "Searching area", true);
   return "";
 }
 
@@ -225,6 +252,7 @@ export function resetDetections() {
   run++;
   detections.found.clear();
   detections.reports.clear();
+  detections.animals = 0;
   detections.from = dateText(Date.now() - DEFAULT_DAYS * DAY);
   detections.to = dateText(Date.now());
   detections.busy = false;

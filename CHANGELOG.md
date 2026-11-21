@@ -14,6 +14,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - Lists of what is yours: My reports, My answers, My messages, My alarms and My zones. A researcher goes from all experiments to the own ones with one button.
 
+- An area manager or wildlife manager finds the animals in an area with "Search this view" on the live map. Found animals are remembered and have a page, a track and charts like the animals a herd manager lists.
+
 ### Changed
 
 - The navigation has a section per audience: Monitor, Mine, Research, Analyze, Admin and Reference. A section and an entry only show when the roles of the account open them. Admin holds the accounts, roles, species, living labs and report types for an administrator; everyone else finds species and living labs under Reference.
@@ -22,6 +24,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Fixed
 
+- "Search this view" left about an eighth of the view unsearched for detections and reports. WildlifeNL measures the radius of a search in degrees, not in metres over the ground, so a search reaches less far east and west than the app assumed.
 - A field name that ends in ID, such as the sensor ID, had two spaces in its label.
 
 ## 2.4.0 - 2026-11-21

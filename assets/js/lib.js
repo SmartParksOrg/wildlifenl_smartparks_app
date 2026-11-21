@@ -419,27 +419,41 @@ export function databaseModel(openapi) {
 // Detections: WildlifeNL answers within a circle around a point, so an area is searched
 // circle by circle
 
-const METRES_PER_DEGREE = 111320;
+/** WildlifeNL does not measure the radius of a search over the ground: it takes a metre as
+ * 0.00001 degree, north to south and east to west alike (`models/Circle.go` in its source).
+ * A radius of 10 km is therefore 0.1 degree around the point, which in the Netherlands is
+ * 11 km to the north and south but under 7 km to the east and west. */
+const DEGREES_PER_METRE = 0.00001;
 
-/** The centres of circles of `radius` metres that together cover the box
+/** The centres of searches of `radius` metres that together cover the box
  * `{south, west, north, east}`: a honeycomb, the pattern that needs the fewest circles. */
 export function circleGrid(box, radius) {
-  const rowStep = (1.5 * radius) / METRES_PER_DEGREE;
+  const reach = radius * DEGREES_PER_METRE;
+  const rowStep = 1.5 * reach;
+  const colStep = Math.sqrt(3) * reach;
   const centres = [];
   let row = 0;
   for (let lat = box.south; lat < box.north + rowStep; lat += rowStep, row++) {
-    const colStep = (Math.sqrt(3) * radius) / (METRES_PER_DEGREE * Math.cos((Math.min(Math.abs(lat), 85) * Math.PI) / 180));
     for (let lng = box.west + (row % 2 ? colStep / 2 : 0); lng < box.east + colStep; lng += colStep) centres.push({ lat, lng });
   }
   return centres;
 }
 
-/** The fewest searches that reach every known place: a place within `radius` metres of an
- * earlier centre needs no search of its own. */
+/** The fewest searches that reach every known place: a place a search of `radius` metres
+ * around an earlier centre reaches needs no search of its own. */
 export function coverPlaces(places, radius) {
+  const reach = radius * DEGREES_PER_METRE;
   const centres = [];
-  for (const place of places) if (!centres.some((centre) => distanceMeters(centre, place) <= radius)) centres.push({ lat: place.lat, lng: place.lng });
+  for (const place of places) if (!centres.some((centre) => Math.hypot(centre.lat - place.lat, centre.lng - place.lng) <= reach)) centres.push({ lat: place.lat, lng: place.lng });
   return centres;
+}
+
+/** The sensor deployment that says which sensor an animal carries: the one that has not
+ * ended, else the one that started last; null for an animal without one. */
+export function sensorOfAnimal(animal) {
+  const deployments = ((animal && animal.borneSensorDeployments) || []).filter((deployment) => deployment && deployment.sensorID);
+  const newestFirst = [...deployments].sort((a, b) => toTime(b.start) - toTime(a.start));
+  return newestFirst.find((deployment) => !deployment.end) || newestFirst[0] || null;
 }
 
 // ---------------------------------------------------------------------------------------------

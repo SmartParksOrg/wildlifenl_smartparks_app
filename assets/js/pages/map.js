@@ -5,7 +5,7 @@
 // from people, living labs and zones.
 
 import { SCOPES } from "../api.js";
-import { counted, detections, detectorsOf, loadDetections, onDetections, reportPlace, searchBox, speciesName, stopSearch } from "../detections.js";
+import { counted, detections, detectorsOf, loadDetections, onDetections, reportPlace, searchBox, searchesAnimals, speciesName, stopSearch } from "../detections.js";
 import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toTime, trackLength, webLink, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
 import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, personName } from "../people.js";
@@ -22,6 +22,8 @@ const TABS = ["animals", "sensors", "people", "detectors", "events", "areas"];
 /** @type {LiveMap|null} */
 let map = null;
 let sensors = [];
+/** How many found animals the map last drew, to notice when a search finds more. */
+let shownAnimals = 0;
 /** living labs and zones: `{id, name, kind, record, points}` */
 let areas = [];
 /** track key to its slot in TRACK_COLORS; a track keeps its colour while it is shown. The key
@@ -212,8 +214,9 @@ function drawPeople() {
 function drawFinds() {
   map.setItems("detectors", detectorList().filter((d) => isShown("detectors", d.id)).map((d) => ({ id: d.id, name: d.name, lat: d.lat, lng: d.lng, selected: isSelected("detectors", d.id) })));
   map.setItems("reports", eventList().filter((event) => isShown("events", event.id)).map((event) => ({ id: event.id, name: event.label, icon: event.icon, lat: event.place.lat, lng: event.place.lng, selected: isSelected("events", event.id) })));
-  const found = detections.found.size + detections.reports.size;
-  $("layerFindText").textContent = detections.progress || (found ? `${plural(detections.found.size, "detection")} and ${plural(detections.reports.size, "report")}, ${detections.from} to ${detections.to}` : detections.message);
+  const found = detections.found.size + detections.reports.size + detections.animals;
+  const animals = detections.animals ? `${plural(detections.animals, "animal")} with a sensor, ` : "";
+  $("layerFindText").textContent = detections.progress || (found ? `${animals}${plural(detections.found.size, "detection")} and ${plural(detections.reports.size, "report")}, ${detections.from} to ${detections.to}` : detections.message);
   $("layerFindStop").hidden = !detections.busy;
   $("layerFindSearch").disabled = detections.busy;
 }
@@ -234,7 +237,7 @@ function drawPanel() {
     drawAreas();
   };
   // a tab without rows is left out, unless the person can fill it from the panel
-  const fillable = { sensors: true, detectors: hasScope(SCOPES.detections), events: hasScope(SCOPES.reports) };
+  const fillable = { animals: searchesAnimals(), sensors: true, detectors: hasScope(SCOPES.detections), events: hasScope(SCOPES.reports) };
   const empty = [];
   const tab = (key, items, options) => {
     if (!items.length && !fillable[key]) empty.push(key);
@@ -260,7 +263,7 @@ function drawPanel() {
         selected: isSelected("animals", sensor.id),
         actions: [trackButton(sensor.id), locate("animals", sensor.id, !sensor.place)],
       })),
-    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : "The animals need the herd-manager role. A sensor you added by its ID is under Sensors." },
+    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : searchesAnimals() ? "No animals found yet. Search this view below." : "The animals need the herd-manager role. A sensor you added by its ID is under Sensors." },
   );
   // every sensor, to look at the data from the side of the sensor. One that is on an animal
   // is not drawn until it is ticked: its animal is on the map already.
@@ -324,7 +327,7 @@ function drawPanel() {
     })),
     { noun: "area", groupLabel: "Per kind", empty: "No living labs or zones to show." },
   );
-  $("layerFind").hidden = !["detectors", "events"].includes(offerTabs(empty));
+  $("layerFind").hidden = ![...(searchesAnimals() ? ["animals"] : []), "detectors", "events"].includes(offerTabs(empty));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -727,7 +730,7 @@ async function reload(force = false) {
     return;
   }
   const problem = listError();
-  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length || canListSensors() ? "" : "Your account cannot list the animals with a sensor (that needs the herd-manager role). Add a sensor by its ID on the Sensors page.", problem ? "warn" : "");
+  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length || canListSensors() ? "" : searchesAnimals() ? "Your account cannot list the animals with a sensor, but it can find them: open Layers and search this view." : "Your account cannot list the animals with a sensor (that needs the herd-manager role). Add a sensor by its ID on the Sensors page.", problem ? "warn" : "");
   redraw();
   locateTheRest();
 }
@@ -783,6 +786,11 @@ function wire() {
   $("layerFindStop").addEventListener("click", stopSearch);
   onDetections(() => {
     if ($("view-map").hidden) return;
+    // a search can find animals; the store then holds them as sensors, so those are read again
+    if (detections.animals !== shownAnimals) {
+      shownAnimals = detections.animals;
+      return reload();
+    }
     drawFinds();
     drawPanel();
     if (["detectors", "events"].includes(selected.kind)) drawObjectPanel();
@@ -863,6 +871,7 @@ export async function show({ query }) {
 /** Forgets what belongs to the account that signed out. */
 export function reset() {
   sensors = [];
+  shownAnimals = 0;
   areas = [];
   tracks.clear();
   selected = { kind: "", id: "" };

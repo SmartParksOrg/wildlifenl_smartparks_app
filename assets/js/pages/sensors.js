@@ -2,9 +2,10 @@
 // Protect. They show the same sensors from two sides: the animals people follow, and the
 // sensors as the technical source, which is also where a sensor is added by its ID.
 
+import { SCOPES } from "../api.js";
 import { ago, buildHash, toTime } from "../lib.js";
 import { recordHash } from "../records.js";
-import { explain } from "../session.js";
+import { explain, hasScope } from "../session.js";
 import { addSensor, canListSensors, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
 import { drawActions } from "../writes.js";
@@ -19,7 +20,7 @@ const LISTS = {
     columns: ["animal", "species", "last_seen", "last_position", "sensor", "deployed_since"],
     labels: { animal: "Animal", species: "Species", last_seen: "Last seen", last_position: "Last position", sensor: "Sensor", deployed_since: "Sensor since" },
     sortKey: "animal",
-    empty: () => (canListSensors() ? "WildlifeNL has no animals with an active sensor." : "The animals need the herd-manager role. A sensor you add by its ID is listed under Sensors."),
+    empty: () => (canListSensors() ? "WildlifeNL has no animals with an active sensor." : hasScope(SCOPES.animalsNear) ? "No animals found yet. Open the live map, go to an area and search it under Layers." : "The animals need the herd-manager role. A sensor you add by its ID is listed under Sensors."),
   },
   sensors: {
     table: "sensorsTable",
@@ -55,7 +56,7 @@ function rowOf(sensor) {
     // the list reads only the newest part of a large sensor, so the total is not known
     readings: !loaded ? null : loaded.complete ? loaded.readings.length : `over ${loaded.readings.length}`,
     deployed_since: sensor.start ? sensor.start.slice(0, 10) : "",
-    source: sensor.animal ? "Deployment" : "Added by hand",
+    source: sensor.found ? "Found on the map" : sensor.animal ? "Deployment" : "Added by hand",
   };
 }
 

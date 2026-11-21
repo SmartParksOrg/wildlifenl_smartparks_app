@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, circleGrid, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -191,15 +191,21 @@ test("databaseModel finds the tables, their fields and their links", () => {
   assert.deepEqual(pairs, ["Animal>Species", "BorneSensorDeployment>Animal", "BorneSensorDeployment>BorneSensorReading*", "BorneSensorReading>User", "Gadget>User"]);
 });
 
-test("circleGrid covers the whole box", () => {
-  const box = { south: 52.0, west: 5.0, north: 52.5, east: 6.0 };
+test("circleGrid covers the whole box the way WildlifeNL measures a radius", () => {
+  // WildlifeNL takes 10 km as 0.1 degree in every direction, wherever on earth the point is
   const radius = 10000;
-  const centres = circleGrid(box, radius);
-  assert.ok(centres.length > 10 && centres.length < 40, String(centres.length));
-  for (let lat = box.south; lat <= box.north; lat += 0.02) {
-    for (let lng = box.west; lng <= box.east; lng += 0.02) {
-      const nearest = Math.min(...centres.map((c) => distanceMeters(c, { lat, lng })));
-      assert.ok(nearest <= radius, `(${lat}, ${lng}) is ${Math.round(nearest)} m from a centre`);
+  const reach = 0.1;
+  for (const box of [
+    { south: 52.0, west: 5.0, north: 52.5, east: 6.0 },
+    { south: -0.3, west: 10.0, north: 0.3, east: 10.8 },
+  ]) {
+    const centres = circleGrid(box, radius);
+    assert.ok(centres.length > 10 && centres.length < 60, String(centres.length));
+    for (let lat = box.south; lat <= box.north; lat += 0.01) {
+      for (let lng = box.west; lng <= box.east; lng += 0.01) {
+        const nearest = Math.min(...centres.map((c) => Math.hypot(c.lat - lat, c.lng - lng)));
+        assert.ok(nearest <= reach, `(${lat}, ${lng}) is ${nearest.toFixed(3)} degrees from a centre`);
+      }
     }
   }
   assert.equal(circleGrid({ south: 52, west: 5, north: 52.001, east: 5.001 }, radius).length >= 1, true);
@@ -211,6 +217,20 @@ test("coverPlaces needs one search for places close together", () => {
   const utrecht = { lat: 52.09, lng: 5.12 };
   assert.deepEqual(coverPlaces([haarlem, near, utrecht], 9000), [haarlem, utrecht]);
   assert.deepEqual(coverPlaces([], 9000), []);
+  // 0.095 degree to the east is under 7 km over the ground at this latitude, yet a search of
+  // 9 km, which WildlifeNL takes as 0.09 degree, does not reach it
+  assert.equal(coverPlaces([haarlem, { lat: 52.39, lng: 4.685 }], 9000).length, 2);
+});
+
+test("sensorOfAnimal picks the deployment that is still on", () => {
+  const ended = { sensorID: "OLD", start: "2026-01-01T00:00:00Z", end: "2026-06-01T00:00:00Z" };
+  const open = { sensorID: "NOW", start: "2026-06-01T00:00:00Z", end: null };
+  const later = { sensorID: "LATER", start: "2026-09-01T00:00:00Z", end: "2026-10-01T00:00:00Z" };
+  assert.equal(sensorOfAnimal({ borneSensorDeployments: [ended, open, later] }).sensorID, "NOW");
+  assert.equal(sensorOfAnimal({ borneSensorDeployments: [ended, later] }).sensorID, "LATER");
+  assert.equal(sensorOfAnimal({ borneSensorDeployments: [] }), null);
+  assert.equal(sensorOfAnimal({ borneSensorDeployments: null }), null);
+  assert.equal(sensorOfAnimal({}), null);
 });
 
 test("webLink lets only http and https addresses through", () => {
