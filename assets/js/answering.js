@@ -36,7 +36,9 @@ export async function answerReport(report) {
   if (!questionnaire) return null;
   // a list of reports names the questionnaire without its questions
   if (!questionnaire.questions) questionnaire = await api.call("GET", `/questionnaire/${encodeURIComponent(questionnaire.ID)}`);
-  const questions = questionnaire.questions || [];
+  // WildlifeNL asks to put questions that share an index in a random order; mixing the list
+  // once does that, because sorting by index keeps questions with the same index as they come
+  const questions = [...(questionnaire.questions || [])].sort(() => Math.random() - 0.5);
   const answered = answeredOf(await api.list("/responses/me/"), report.ID);
   if (!openQuestion(questions, answered)) {
     toast(questions.length ? "You answered every question about this report." : "This questionnaire has no questions.");

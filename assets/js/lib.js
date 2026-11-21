@@ -664,3 +664,60 @@ export function responseBodies(question, interactionID, picked, text) {
   return [{ ...base, text: words }];
 }
 
+// ---------------------------------------------------------------------------------------------
+// Research: the state of an experiment and what a questionnaire needs
+
+/** Where an experiment stands: `upcoming` before its start, `completed` after its end, and
+ * `live` in between; one without an end stays live. */
+export function experimentStatus(experiment, now = Date.now()) {
+  if (toTime(experiment.start) > now) return "upcoming";
+  return toTime(experiment.end) <= now ? "completed" : "live";
+}
+
+/**
+ * Why an experiment, and what hangs under it, cannot be changed by this account: a sentence,
+ * or an empty text when it can. WildlifeNL only lets the owner change an experiment, and
+ * only before it starts.
+ */
+export function whyLocked(experiment, userID, now = Date.now()) {
+  const owner = experiment.user;
+  if (owner && String(owner.ID) !== String(userID)) return `This experiment belongs to ${owner.name || "someone else"}. Only its owner can change it.`;
+  const status = experimentStatus(experiment, now);
+  if (status === "live") return "This experiment is live. WildlifeNL only takes changes to an experiment, its questionnaires and its messages before it starts. You can end it.";
+  if (status === "completed") return "This experiment has ended and cannot be changed.";
+  return "";
+}
+
+/** What an upcoming experiment still misses, as sentences; none when it is ready to start.
+ * `questionnaires` carry their questions with answer options. */
+export function readiness(questionnaires, messages) {
+  const missing = [];
+  if (!questionnaires.length && !messages.length) missing.push("It has no questionnaire and no message yet, so it would do nothing.");
+  for (const questionnaire of questionnaires) {
+    const questions = questionOrder(questionnaire.questions);
+    if (!questions.length) missing.push(`The questionnaire "${questionnaire.name}" has no questions.`);
+    for (const question of questions) {
+      if (!(question.answers || []).length && !question.allowOpenResponse) missing.push(`Question ${question.index} of "${questionnaire.name}" has no answer options and takes no text, so nobody can answer it.`);
+    }
+  }
+  return missing;
+}
+
+/**
+ * What to send to copy the questions of a questionnaire: per question its body without the
+ * questionnaire it goes to, and per answer option its body with `of` and `next`, the IDs of
+ * the question it belongs to and jumps to in the original. The new IDs are only known once
+ * the questions are made. A jump out of the questionnaire is dropped.
+ */
+export function copyBodies(questionnaire) {
+  const questions = questionOrder(questionnaire.questions);
+  const ids = new Set(questions.map((question) => question.ID));
+  return {
+    questions: questions.map((question) => ({
+      from: question.ID,
+      body: { text: question.text, description: question.description || "", index: question.index, allowMultipleResponse: Boolean(question.allowMultipleResponse), allowOpenResponse: Boolean(question.allowOpenResponse), ...(question.openResponseFormat ? { openResponseFormat: question.openResponseFormat } : {}) },
+    })),
+    answers: questions.flatMap((question) => [...(question.answers || [])].sort(byIndex).map((answer) => ({ of: question.ID, next: ids.has(answer.nextQuestionID) ? answer.nextQuestionID : null, body: { text: answer.text, index: answer.index } }))),
+  };
+}
+

@@ -14,6 +14,9 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 - Lists of what is yours: My reports, My answers, My messages, My alarms and My zones. A researcher goes from all experiments to the own ones with one button.
 
+- Research: the list of experiments shows whether each is upcoming, live or ended, with its counts. The page of an experiment says what it still misses before it starts. A questionnaire has a page with its questions in order, their answer options and jumps, and can be copied to another experiment.
+- The lists under a record, such as the responses of an experiment, can be filtered, copied as JSON and downloaded as CSV.
+- "Search this area" in the panel of a living lab on the live map.
 - Share my location, on the Account page: off until you switch it on, then your position goes to WildlifeNL every 10 minutes while the app is open on screen, as the phone apps do. The live map shows the animals, detections and reports WildlifeNL finds near you, and a message of an experiment is shown as a notice.
 - After a report the app asks the questions a running experiment has about it, and sends the answers. You can stop halfway and go on later from the page of the report.
 - Your own reports are on the live map, under Events, for every account.
@@ -22,6 +25,9 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Changed
 
 - The navigation has a section per audience: Monitor, Mine, Research, Analyze, Admin and Reference. A section and an entry only show when the roles of the account open them. Admin holds the accounts, roles, species, living labs and report types for an administrator; everyone else finds species and living labs under Reference.
+- Deleting an experiment, a questionnaire or a question removes what hangs under it and says first how much that is. Before, WildlifeNL refused the delete as soon as there was anything under it.
+- The buttons to change an experiment and what hangs under it only show for your own experiment before it starts, with a sentence that says why when they do not. "End now" only shows while an experiment is live.
+- The form of a message asks for what its trigger needs, and names the five severities.
 - Animals, Sensors, Detections and the Data explorer are left out of the navigation for an account whose roles cannot read them.
 - The layers panel of the live map leaves out a tab that has nothing to show, such as Animals for an account that may not list them. Sensors stays, and Detectors and Events stay for an account that can search for them.
 

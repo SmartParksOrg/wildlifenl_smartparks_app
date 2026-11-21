@@ -72,7 +72,7 @@ The app reads from WildlifeNL itself which changes it accepts and which roles ea
 | Add an animal, put a sensor on an animal | Animals, the page of an animal | `herd-manager` |
 | Draw a zone, add or remove its species, deactivate it | Zones, the page of a zone | `land-user` or `wildlife-manager` |
 | Make a report: a sighting, damage or a collision, and answer the questions an experiment has about it | Reports, the page of a report | Any account |
-| Add an experiment, change, end or delete it, add its questionnaires, questions, answer options and messages | Experiments and the pages under it | `researcher`, and only for your own experiments |
+| Add an experiment, change, end or delete it, add its questionnaires, questions, answer options and messages, copy a questionnaire | Experiments and the pages under it | `researcher`, and only for your own experiments, before they start |
 | Add or change a species, a living lab or a report type | Species, Living labs, Report types | `administrator` |
 | Add a person, give or take away a role | People, the page of a person | `administrator` |
 | Change your own profile | Account | Any account |
@@ -82,6 +82,20 @@ A form asks for exactly what WildlifeNL takes, checks it before it is sent, and 
 The app does not send readings, detections or contacts; those come from collars, camera traps and the phone apps. It also cannot delete your account.
 
 A contact is a phone that was near the collar of an animal, which the phone apps notice over Bluetooth. A web page cannot scan for Bluetooth devices nearby, and this app never connects to a collar, so contacts are only shown here.
+
+### Experiments
+
+An experiment is upcoming until its start, live until its end, and ended after that; the list of experiments shows which, with how many questionnaires and messages it has and how many were answered and sent.
+
+- **Before it starts** you can change your own experiment and everything under it. Its page says what it still misses, such as a questionnaire without questions.
+- **A questionnaire** has a page with its questions in the order they are asked. Add a question, add its answer options, and let an answer option go on to a later question to skip the ones in between. WildlifeNL cannot change a question or an answer option; delete it and add it again.
+- **Copy to another experiment** makes the same questionnaire, with its questions, answer options and jumps, in one of your experiments that has not started.
+- **A message** is tied to a trigger: an encounter with a species within the metres and minutes you give, an answer option of a questionnaire, or an alarm for a species. The form asks for what the chosen trigger needs.
+- **Delete** removes what hangs under a record with it, and says first how much that is.
+- **Once it is live** nothing can be changed any more; you can end it. The pages say so in place of the buttons.
+- **The results** are the lists on the page of an experiment: reports, responses, sent messages, contacts and tracking readings. Each can be filtered, copied as JSON and downloaded as CSV.
+
+"Search this area" in the panel of a living lab on the live map looks for the detections, reports and animals inside the box around it.
 
 ### Share my location
 

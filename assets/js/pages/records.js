@@ -5,9 +5,14 @@
 import { buildHash, toTime, webLink, words } from "../lib.js";
 import { MapView } from "../map.js";
 import { TYPES, canList, getRecord, linkOf, listHash, listRecords, listTitle, recordHash, seesOwnOnly, relatedRecords, titleOf } from "../records.js";
+import { loadApi, operationOf } from "../rights.js";
 import { explain, hasScope } from "../session.js";
 import { $, DataTable, el, facts, formatMoment, note, plural, toast } from "../ui.js";
 import { drawActions } from "../writes.js";
+import { experimentCard, questionsCard } from "./research.js";
+
+/** A card of its own for a kind of record, and the list inside the record it stands for. */
+const CARDS = { experiments: { draw: experimentCard }, questionnaires: { draw: questionsCard, field: "questions" } };
 
 const PLACE_FIELDS = ["place", "location", "startLocation", "endLocation"];
 
@@ -81,7 +86,7 @@ function tableOf(type, records, columns) {
     rows,
     options: {
       columns,
-      labels: Object.fromEntries(columns.map((column) => [column, words(column)])),
+      labels: { ...Object.fromEntries(columns.map((column) => [column, words(column)])), ...((TYPES[type] && TYPES[type].labels) || {}) },
       format: Object.fromEntries(moments.map((column) => [column, (value) => formatMoment(toTime(value))])),
       link: columns.map((column) => ({ column, href: (row) => row.__links[column] || "" })),
       sortKey: moments[0] || columns[0],
@@ -188,6 +193,7 @@ async function showRecord(type, id) {
   $("recordSubtitle").textContent = def.label;
   // what the account may change; afterwards the page is read again, or left when the record is gone
   drawActions($("recordActions"), type, "record", record, (result, action) => {
+    if (action.opens && result && result.ID != null) return (location.hash = recordHash(action.opens, result.ID));
     if (!action.gone) return showRecord(type, id);
     if (canList(type)) location.hash = listHash(type);
     else history.back();
@@ -201,8 +207,10 @@ async function showRecord(type, id) {
     }
   };
 
-  // the token for notifications of the phone app is of no use to a reader
-  const fields = Object.entries(record).filter(([field]) => field !== "$schema" && field !== "firebaseCloudMessagingToken");
+  // the token for notifications of the phone app is of no use to a reader, and a field that
+  // the card of the kind shows in full is not listed twice
+  const own = CARDS[type];
+  const fields = Object.entries(record).filter(([field]) => field !== "$schema" && field !== "firebaseCloudMessagingToken" && !(own && own.field === field));
   const lists = fields.filter(([field, value]) => Array.isArray(value) && value.length && value.every((item) => item && typeof item === "object" && !isPoint(item)) && !value.every((item) => linkOf(field, item)));
   facts($("recordFacts"), fields.filter(([field]) => !lists.some(([name]) => name === field)).map(([field, value]) => [words(field), nodeOf(field, value)]));
 
@@ -221,7 +229,8 @@ async function showRecord(type, id) {
     map.setArea(outline.length > 2 ? outline : []);
   }
 
-  // lists inside the record, then the lists that hang under it
+  // the card of the kind, the lists inside the record, then the lists that hang under it
+  if (own) extra.append(own.draw(record, () => showRecord(type, id)));
   for (const [field, value] of lists) {
     const inner = { answers: "answers", questions: "questions", borneSensorDeployments: "" }[field] || "";
     const target = el("div");
@@ -229,8 +238,13 @@ async function showRecord(type, id) {
     const { rows, options } = tableOf(inner, value, columnsOf(value));
     new DataTable(target, { filename: `wildlifenl-${type}-${field}`, tools: false }).setRows(rows, options);
   }
+  // a list is left out on a server that does not have its call; when the description of the
+  // API cannot be read, every list is tried
+  const described = await loadApi().then(() => true, () => false);
+  if (mine !== run) return;
   for (const relation of def.related || []) {
     if (!hasScope(relation.needs || [])) continue;
+    if (relation.call && described && !operationOf("GET", relation.call)) continue;
     const target = el("div", { class: "empty", text: "Loading…" });
     extra.append(card(relation.label, target));
     relatedRecords(relation, record)
@@ -238,7 +252,8 @@ async function showRecord(type, id) {
         if (mine !== run) return;
         target.className = "";
         const table = tableOf(relation.type || "", rows, relation.columns || columnsOf(rows));
-        new DataTable(target, { filename: `wildlifenl-${type}-related`, empty: "Nothing here.", tools: false }).setRows(table.rows, table.options);
+        // with its tools, so a list under a record can be copied and downloaded
+        new DataTable(target, { filename: `wildlifenl-${type}-${relation.type || "list"}`, empty: "Nothing here." }).setRows(table.rows, table.options);
         if (relation.onMap && rows.length && map) {
           map.setPoints(
             rows.filter((row) => isPoint(row.location)).map((row) => ({ lat: row.location.latitude, lng: row.location.longitude, t: row.timestamp ? toTime(row.timestamp) : row.count, count: row.count, timestamp: row.timestamp })),

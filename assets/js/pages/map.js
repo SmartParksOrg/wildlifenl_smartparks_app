@@ -545,8 +545,23 @@ function areaPanel(area) {
       iconButton("list", lab ? "Open the living lab" : "Open the zone", null, { href: recordHash(area.kind, area.id) }),
       iconButton("locate", "Show the whole area", () => map.fit(area.points, { animate: true }), { disabled: area.points.length < 3 }),
       lab && hasScope(SCOPES.visits) ? iconButton("flame", showing ? "Hide the visits" : "Show where people were, last 30 days", () => toggleVisits(area), { on: showing }) : null,
+      canSearch() ? iconButton("search", "Search this area for what the map can find", () => searchArea(area), { disabled: area.points.length < 3 || detections.busy }) : null,
     ]),
   ];
+}
+
+/** Whether a search of an area can find anything for this account. */
+function canSearch() {
+  return hasScope(SCOPES.detections) || hasScope(SCOPES.reports) || searchesAnimals();
+}
+
+/** Searches the box around an area, the way "Search this view" searches the view. */
+function searchArea(area) {
+  const lats = area.points.map((point) => point.lat);
+  const lngs = area.points.map((point) => point.lng);
+  const problem = searchBox({ south: Math.min(...lats), west: Math.min(...lngs), north: Math.max(...lats), east: Math.max(...lngs) });
+  if (problem) return toast(problem, true);
+  showCard("layerPanel", true);
 }
 
 function drawObjectPanel() {

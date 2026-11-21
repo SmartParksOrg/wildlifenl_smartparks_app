@@ -5,7 +5,7 @@
 
 import { SCOPES } from "./api.js";
 import { detections, loadDetections, loadOwnReports } from "./detections.js";
-import { buildHash } from "./lib.js";
+import { buildHash, experimentStatus } from "./lib.js";
 import { loadPeople, people, personName } from "./people.js";
 import { account, hasScope } from "./session.js";
 
@@ -55,7 +55,9 @@ async function knownPeople() {
 
 const ofPerson = (list) => (record) => list().filter((item) => item.user && String(item.user.ID) === String(record.ID));
 
-const research = (path) => ({ needs: SCOPES.research, load: (record) => account.api.list(`/${path}/experiment/${record.ID}`) });
+/** A list under an experiment. `call` names the call, so the list is left out on a server
+ * that does not have it. */
+const research = (path) => ({ needs: SCOPES.research, call: `/${path}/experiment/{id}`, load: (record) => account.api.list(`/${path}/experiment/${record.ID}`) });
 
 /**
  * The kinds of records, by the word in the address.
@@ -65,7 +67,10 @@ const research = (path) => ({ needs: SCOPES.research, load: (record) => account.
  * - `mine` is where the account's own records are read, for the list `?mine=1`; `own` says
  *   the list holds nothing but the account's own.
  * - `get` reads one record in full, `getNeeds` are its roles.
- * - `columns` are the fields of the list, `title` the name of one record.
+ * - `columns` are the fields of the list, `labels` names for the ones whose own name says
+ *   too little, `title` the name of one record.
+ * - `shape(record)` adds what the app works out about a record, such as the state of an
+ *   experiment.
  * - `related` are lists that hang under one record, each with its type and loader.
  */
 export const TYPES = {
@@ -151,7 +156,9 @@ export const TYPES = {
     mine: "/experiments/me/",
     get: (id) => `/experiment/${id}`,
     getNeeds: SCOPES.research,
-    columns: ["name", "livingLab", "start", "end", "user"],
+    columns: ["name", "status", "livingLab", "start", "end", "numberOfQuestionnaires", "numberOfMessages", "questionnaireActivity", "messageActivity", "user"],
+    labels: { numberOfQuestionnaires: "Questionnaires", numberOfMessages: "Messages", questionnaireActivity: "Questionnaires answered", messageActivity: "Messages sent", user: "Owner" },
+    shape: (record) => ({ ...record, status: experimentStatus(record) }),
     related: [
       { label: "Questionnaires", type: "questionnaires", ...research("questionnaires"), columns: ["name", "identifier", "interactionType"] },
       { label: "Messages", type: "messages", ...research("messages"), columns: ["name", "severity", "species", "text"] },
@@ -280,7 +287,8 @@ function keep(type, record) {
   const id = idOf(record);
   if (!id) return;
   const key = `${type}|${id}`;
-  seen.set(key, { ...(seen.get(key) || {}), ...record });
+  const merged = { ...(seen.get(key) || {}), ...record };
+  seen.set(key, TYPES[type].shape ? TYPES[type].shape(merged) : merged);
   for (const [field, value] of Object.entries(record)) {
     const inner = FIELD_TYPES[field];
     if (inner) for (const item of [].concat(value || [])) if (item && typeof item === "object") keep(inner, item);
@@ -351,6 +359,8 @@ export async function listRecords(type, mine = false) {
   else if (def.path && all) records = await account.api.list(def.path);
   else records = [...seen.entries()].filter(([key]) => key.startsWith(`${type}|`)).map(([, record]) => record);
   for (const record of records) keep(type, record);
+  // the records as they are kept, with what the app works out about them
+  if (def.shape) records = records.map((record) => seen.get(`${type}|${idOf(record)}`) || record);
   return { records, own: Boolean((mine && def.mine) || (def.ownOnly && !all)) };
 }
 

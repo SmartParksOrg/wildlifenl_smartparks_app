@@ -173,11 +173,24 @@ function list(field, value, context) {
   return { node, read: () => rows.map((row) => Object.fromEntries(row.inner.map((control) => [control.name, control.read()]))) };
 }
 
+/** One value that is only there when its rule in `when` says so, and is then needed: the
+ * species of a message that is sent at an encounter, for one. */
+function conditional(field, value, context) {
+  const rule = context.when[field.name];
+  const control = scalar({ ...field, required: true, nullable: false }, value, context.choices[field.name]);
+  const refresh = () => {
+    const on = Boolean(rule(context.values()));
+    control.node.hidden = !on;
+    for (const input of control.node.querySelectorAll("input, select, textarea")) input.disabled = !on; // a field that is not there is not checked by the browser
+  };
+  return { node: control.node, refresh, read: () => (control.node.hidden ? "" : control.read()) };
+}
+
 function controls(fields, values, context) {
   return fields.map((field) => {
     const value = values[field.name];
     const make = { point, outline }[field.kind];
-    const control = make ? make(field, value, context.places) : field.kind === "group" ? group(field, value, context) : field.kind === "list" ? list(field, value, context) : scalar(field, value, context.choices[field.name]);
+    const control = make ? make(field, value, context.places) : field.kind === "group" ? group(field, value, context) : field.kind === "list" ? list(field, value, context) : context.when[field.name] ? conditional(field, value, context) : scalar(field, value, context.choices[field.name]);
     return { name: field.name, plain: field.kind !== "group" && field.kind !== "list", ...control };
   });
 }
@@ -223,7 +236,8 @@ function wirePlaces(places) {
  * @param text an explanation above the fields; with no fields the dialog asks to confirm
  * @param fields from `formFields`, `values` what they start with
  * @param choices per field name the `{value, label}` options of a list to pick from
- * @param when per name of optional details a rule `(values) => boolean` for showing them
+ * @param when per name of optional details, or of a field, a rule `(values) => boolean` for
+ *   showing them; a field that is shown by its rule is needed
  * @param send makes the call with the body; what it throws is shown in the dialog
  */
 export function openForm({ title, subtitle = "", text = "", fields = [], values = {}, choices = {}, when = {}, submit = "Save", danger = false, send }) {

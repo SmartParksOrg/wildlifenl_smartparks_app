@@ -116,10 +116,21 @@ The app reads the roles for a write call, and the fields the call takes, from th
 - An action with `run(record)` does everything itself in place of one form and one call; its `call` only says which call decides who may. "Answer the questions" is one.
 - After a change `runAction` drops what `records.js` remembered of the record (`forget`), keeps the answer when it is the record itself (`remember`), and the page reads again.
 
+### Research
+
+An experiment is upcoming, live or completed (`experimentStatus` in `lib.js`). The rule for every button under an experiment is `editable` in `writes.js`: the experiment is the account's own and has not started, which `whyLocked` puts into a sentence for the page. A questionnaire and a message name their experiment and its owner; a question and an answer option do not, so they get their buttons on the page of their questionnaire, where `pages/research.js` draws them with the experiment added to the record. That module also draws the card of an experiment: its state, and while it is upcoming what it misses (`readiness`).
+
+`research.js` holds what takes more than one call. The API deletes nothing under a record and refuses a delete while something points at it, so `deleteExperiment` removes the messages first (a message can point at an answer option), then per questionnaire the answer options (one can jump to a question), the questions and the questionnaire. `copyQuestionnaire` makes the questions first and then the answer options, so a jump can point at the new question (`copyBodies` in `lib.js`); when a call fails it removes what it made. More than 60 calls in a row are spaced 600 ms apart, under the limit of 120 requests a minute.
+
+An action reaches these through `send(record, body)`, and says what goes with a delete through a `text` that is a function. A `when` rule on a single field shows it when the rule holds and then makes it needed; the form of a message uses that per trigger. `choices` that an action names are all a field offers, also when there are none.
+
+The lists under an experiment are its exports: each has the tools of a table. A list is left out when the server does not have its call (`call` on a relation), which is the case for three of them on the live server.
+
 Facts from the API's source that shaped the actions:
 
-- The calls that delete an answer option, a question, a questionnaire, a message or an experiment name no role, but the API only carries them out for the owner of the experiment. The app asks for `researcher` there (`needs`) and hides the buttons on an experiment of someone else (`own`).
-- An experiment, and what hangs under it, can only be changed before it starts.
+- The calls that delete an answer option, a question, a questionnaire, a message or an experiment name no role. For an experiment the API checks the owner and the start; for the other four its check does not look at the record that is deleted, so the app is the guard there: it asks for `researcher` (`needs`) and only offers the button on the account's own experiment before it starts.
+- An experiment, and what hangs under it, can only be changed before it starts. A message with the trigger `alarm` needs a species. Ending an experiment that has not started is refused.
+- Questions that share an `index` are meant to be asked in a random order; `answering.js` mixes them once per person.
 - A new sensor deployment ends every earlier deployment of that sensor at the new start.
 - `PUT /profile/me/` replaces the whole profile, also the token for notifications the phone app stored (`firebaseCloudMessagingToken`). The form does not show that field and sends it back as it was (`hide`).
 - A zone and a living lab need an outline of three or more points. A deactivated zone cannot be switched on again.

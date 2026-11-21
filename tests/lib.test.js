@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, answeredOf, openQuestion, questionOrder, responseBodies, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, copyBodies, experimentStatus, readiness, whyLocked, answeredOf, openQuestion, questionOrder, responseBodies, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -425,5 +425,53 @@ test("formBody takes several ticked choices", () => {
   const fields = [{ name: "picked", label: "Which?", kind: "ticks", required: true }];
   assert.deepEqual(formBody(fields, { picked: ["a", "b"] }), { picked: ["a", "b"] });
   assert.throws(() => formBody(fields, { picked: [] }), /Which\? is needed/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Research
+
+test("experimentStatus goes from upcoming to live to completed", () => {
+  const experiment = { start: "2026-11-21T10:00:00Z", end: "2026-11-22T10:00:00Z" };
+  assert.equal(experimentStatus(experiment, T0 - 1), "upcoming");
+  assert.equal(experimentStatus(experiment, T0), "live");
+  assert.equal(experimentStatus(experiment, T0 + 24 * 3600 * 1000 - 1), "live");
+  assert.equal(experimentStatus(experiment, T0 + 24 * 3600 * 1000), "completed");
+  // without an end it stays live
+  assert.equal(experimentStatus({ start: "2026-11-21T10:00:00Z" }, T0 + 1e12), "live");
+  assert.equal(experimentStatus({ start: "2026-11-21T10:00:00Z", end: null }, T0 + 1e12), "live");
+});
+
+test("whyLocked names the owner, then the state", () => {
+  const mine = { start: "2026-11-21T10:00:00Z", end: "2026-11-22T10:00:00Z", user: { ID: "me", name: "Me" } };
+  assert.equal(whyLocked(mine, "me", T0 - 1), "");
+  assert.match(whyLocked(mine, "me", T0), /is live/);
+  assert.match(whyLocked(mine, "me", T0 + 1e10), /has ended/);
+  assert.match(whyLocked({ ...mine, user: { ID: "other", name: "Ada" } }, "me", T0 - 1), /belongs to Ada/);
+  // a record that does not say whose it is, is judged by its state alone
+  assert.equal(whyLocked({ start: mine.start }, "me", T0 - 1), "");
+});
+
+test("readiness lists what an experiment still misses", () => {
+  assert.equal(readiness([], []).length, 1);
+  assert.deepEqual(readiness([], [{ ID: "m1" }]), []);
+  const full = { name: "Sightings", questions: [{ index: 1, answers: [{ ID: "a" }] }, { index: 2, answers: [], allowOpenResponse: true }] };
+  assert.deepEqual(readiness([full], []), []);
+  assert.match(readiness([{ name: "Empty", questions: null }], [])[0], /"Empty" has no questions/);
+  assert.match(readiness([{ name: "Half", questions: [{ index: 3, answers: [], allowOpenResponse: false }] }], [])[0], /Question 3 of "Half"/);
+});
+
+test("copyBodies keeps the order and the jumps inside the questionnaire", () => {
+  const copy = copyBodies({ questions: QUESTIONS });
+  assert.deepEqual(copy.questions.map((q) => [q.from, q.body.index]), [["q1", 1], ["q2", 2], ["q3", 3], ["q4", 4]]);
+  assert.deepEqual(copy.questions[0].body, { text: "First", description: "", index: 1, allowMultipleResponse: false, allowOpenResponse: false });
+  assert.deepEqual(copy.answers, [
+    { of: "q1", next: null, body: { text: "Yes", index: 1 } },
+    { of: "q1", next: "q3", body: { text: "No", index: 2 } },
+    { of: "q1", next: "q1", body: { text: "Back", index: 3 } },
+    { of: "q2", next: null, body: { text: "One", index: 1 } },
+  ]);
+  // a jump to a question of another questionnaire does not come along
+  assert.equal(copyBodies({ questions: [{ ID: "x", index: 1, text: "Only", answers: [{ ID: "y", index: 1, text: "Out", nextQuestionID: "elsewhere" }] }] }).answers[0].next, null);
+  assert.deepEqual(copyBodies({ questions: null }), { questions: [], answers: [] });
 });
 

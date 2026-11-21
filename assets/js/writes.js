@@ -7,9 +7,10 @@ import { answerReport } from "./answering.js";
 import { SCOPES } from "./api.js";
 import { loadOwnReports } from "./detections.js";
 import { openForm } from "./form.js";
-import { formFields, formValues } from "./lib.js";
+import { experimentStatus, formFields, formValues, whyLocked } from "./lib.js";
 import { loadPeople } from "./people.js";
 import { TYPES, forget, listRecords, remember, titleOf } from "./records.js";
+import { answersOf, copyQuestionnaire, deleteExperiment, deleteQuestion, deleteQuestionnaire, experimentContents, questionnaireContents } from "./research.js";
 import { loadApi, operationOf } from "./rights.js";
 import { account, explain, hasScope } from "./session.js";
 import { loadSensors } from "./store.js";
@@ -22,6 +23,28 @@ function own(record) {
   return !user || user.ID === account.session.userID;
 }
 
+/** The experiment a record is, or belongs to; null for a record that does not say. */
+function experimentOf(record) {
+  return record.experiment || (record.start && record.user ? record : null);
+}
+
+/** Whether the account can change a record of an experiment: its own experiment, before it
+ * starts. WildlifeNL does not check this for every call, so the app does. A record that does
+ * not name its experiment gets no button; the page of its questionnaire has them. */
+function editable(record) {
+  const experiment = experimentOf(record);
+  return Boolean(experiment && experiment.user) && !whyLocked(experiment, account.session.userID);
+}
+
+const live = (experiment) => own(experiment) && experimentStatus(experiment) === "live";
+
+/** The experiments of the account that have not started, to copy a questionnaire to. */
+async function upcomingExperiments() {
+  return (await account.api.list("/experiments/me/")).filter((experiment) => experimentStatus(experiment) === "upcoming");
+}
+
+const SEVERITIES = ["Debug", "Info", "Warning", "Urgent", "Critical"].map((name, index) => ({ value: index + 1, label: `${index + 1}: ${name}` }));
+
 const now = () => new Date().toISOString();
 const reloadPeople = () => loadPeople(true).catch(() => {}); // the pages that show people report their own errors
 
@@ -32,13 +55,17 @@ const reloadPeople = () => loadPeople(true).catch(() => {}); // the pages that s
  * - `edit` starts the form with the record as it is.
  * - `preset(record)` are fields the record decides, which the form leaves out.
  * - `hide` are fields the form leaves out and sends back unchanged.
- * - `defaults()` are values a new form starts with.
- * - `choices` gives per field the records to pick from, where that is not every record.
- * - `when` says per part of the form when it is needed.
+ * - `defaults(record)` are values a new form starts with.
+ * - `choices` gives per field the records to pick from, where that is not every record;
+ *   `options` gives per field a fixed list of `{value, label}`.
+ * - `when` says per part of the form, or per field, when it is needed.
+ * - `send(record, body)` makes the change where that takes more than the one call.
+ * - `opens` says the page goes to the record WildlifeNL answered with.
  * - `show(record)` hides the button for a record the action does not fit.
  * - `needs` are the roles for a call the API leaves open to every account but only carries
  *   out for the owner.
- * - `text` explains the action; with `confirm` it is all the dialog asks.
+ * - `text` explains the action, or is a function of the record that does; with `confirm` it
+ *   is all the dialog asks.
  * - `gone` says the record is no more afterwards; `after(result)` does what follows, with
  *   what WildlifeNL answered.
  * - `run(record)` does the whole action itself, in place of one form and one call; `call`
@@ -82,23 +109,46 @@ export const ACTIONS = {
   ],
   experiments: [
     { label: "Add experiment", where: "list", call: ["POST", "/experiment/"], after: reloadPeople },
-    { label: "Edit", where: "record", call: ["PUT", "/experiment/{id}"], edit: true, show: own, text: "WildlifeNL only changes an experiment that has not started yet." },
-    { label: "Add questionnaire", where: "record", call: ["POST", "/questionnaire/"], preset: (experiment) => ({ experimentID: experiment.ID }), show: own, text: "WildlifeNL only takes a questionnaire for an experiment that has not started yet." },
-    { label: "Add message", where: "record", call: ["POST", "/message/"], preset: (experiment) => ({ experimentID: experiment.ID }), show: own, text: "The trigger decides which fields are needed: an encounter needs the species, the metres and the minutes; an answer needs the answer option; an alarm needs the species." },
-    { label: "End now", where: "record", call: ["PUT", "/experiment/end/{id}"], confirm: true, show: (experiment) => own(experiment) && !(Date.parse(experiment.end) <= Date.now()), text: "The experiment ends at once. Its questionnaires and messages are no longer sent." },
-    { label: "Delete", where: "record", call: ["DELETE", "/experiment/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: own, after: reloadPeople, text: "The experiment is removed from WildlifeNL. This cannot be undone." },
+    { label: "Edit", where: "record", call: ["PUT", "/experiment/{id}"], edit: true, show: editable },
+    { label: "Add questionnaire", where: "record", call: ["POST", "/questionnaire/"], preset: (experiment) => ({ experimentID: experiment.ID }), show: editable, opens: "questionnaires", text: "Name it, choose the kind of report it follows, then add its questions on its page." },
+    {
+      label: "Add message",
+      where: "record",
+      call: ["POST", "/message/"],
+      preset: (experiment) => ({ experimentID: experiment.ID }),
+      show: editable,
+      options: { severity: SEVERITIES },
+      choices: { answerID: answersOf },
+      // the trigger decides what else a message needs
+      when: { speciesID: (values) => ["encounter", "alarm"].includes(values.trigger), encounterMeters: (values) => values.trigger === "encounter", encounterMinutes: (values) => values.trigger === "encounter", answerID: (values) => values.trigger === "answer" },
+      text: "A message is shown to a person when its trigger happens: an encounter with an animal of a species (within the metres and minutes you give), an answer the person picks in a questionnaire, or an alarm for a species in a zone.",
+    },
+    { label: "End now", where: "record", call: ["PUT", "/experiment/end/{id}"], confirm: true, show: live, text: "The experiment ends at once. Its questionnaires and messages are no longer sent." },
+    { label: "Delete", where: "record", call: ["DELETE", "/experiment/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: editable, text: experimentContents, send: deleteExperiment, after: reloadPeople },
   ],
   questionnaires: [
-    { label: "Edit", where: "record", call: ["PUT", "/questionnaire/{id}"], edit: true, show: own },
-    { label: "Add question", where: "record", call: ["POST", "/question/"], preset: (questionnaire) => ({ questionnaireID: questionnaire.ID }), show: own },
-    { label: "Delete", where: "record", call: ["DELETE", "/questionnaire/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: own, text: "The questionnaire is removed from WildlifeNL. This cannot be undone." },
+    { label: "Edit", where: "record", call: ["PUT", "/questionnaire/{id}"], edit: true, show: editable },
+    { label: "Add question", where: "record", call: ["POST", "/question/"], preset: (questionnaire) => ({ questionnaireID: questionnaire.ID }), defaults: (questionnaire) => ({ index: (questionnaire.questions || []).length + 1 }), show: editable, text: "Index is the place of the question in the questionnaire. A question with answer options is multiple choice; one without takes a text, when you allow an open response." },
+    {
+      label: "Copy to another experiment",
+      where: "record",
+      call: ["POST", "/questionnaire/"],
+      edit: true,
+      choices: { experimentID: upcomingExperiments },
+      send: copyQuestionnaire,
+      opens: "questionnaires",
+      text: "Makes a questionnaire with the same questions, answer options and jumps in one of your experiments that has not started yet.",
+    },
+    { label: "Delete", where: "record", call: ["DELETE", "/questionnaire/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: editable, text: questionnaireContents, send: deleteQuestionnaire },
   ],
+  // a question and an answer option do not say which experiment they belong to; the page of
+  // their questionnaire draws these buttons with that experiment added to the record
   questions: [
-    { label: "Add answer option", where: "record", call: ["POST", "/answer/"], preset: (question) => ({ questionID: question.ID }) },
-    { label: "Delete", where: "record", call: ["DELETE", "/question/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, text: "The question is removed from WildlifeNL. This cannot be undone." },
+    { label: "Add answer option", where: "record", call: ["POST", "/answer/"], preset: (question) => ({ questionID: question.ID }), defaults: (question) => ({ index: (question.answers || []).length + 1 }), choices: { nextQuestionID: (question) => question.later || [] }, show: editable, text: "Next question is where the questionnaire goes on after this answer, when that is not simply the following question." },
+    { label: "Delete", where: "record", call: ["DELETE", "/question/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: editable, send: deleteQuestion, text: (question) => `The question is removed from WildlifeNL${(question.answers || []).length ? ", with its answer options" : ""}. This cannot be undone.` },
   ],
-  answers: [{ label: "Delete", where: "record", call: ["DELETE", "/answer/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, text: "The answer option is removed from WildlifeNL. This cannot be undone." }],
-  messages: [{ label: "Delete", where: "record", call: ["DELETE", "/message/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, text: "The message is removed from WildlifeNL. This cannot be undone." }],
+  answers: [{ label: "Delete", where: "record", call: ["DELETE", "/answer/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: editable, text: "The answer option is removed from WildlifeNL. This cannot be undone." }],
+  messages: [{ label: "Delete", where: "record", call: ["DELETE", "/message/{id}"], needs: SCOPES.research, confirm: true, danger: true, gone: true, show: editable, text: "The message is removed from WildlifeNL. This cannot be undone." }],
   people: [
     { label: "Add person", where: "list", call: ["POST", "/user/"], text: "Makes an account for this email address. The person signs in with a code sent to it." },
     { label: "Give a role", where: "record", call: ["POST", "/role/"], preset: (person) => ({ userID: person.ID }), text: "WildlifeNL can take a while before it honours a changed role." },
@@ -145,17 +195,20 @@ async function choicesOf(fields, action, record) {
       const type = REFERS[field.name];
       if (LABELS[field.name]) field.label = LABELS[field.name];
       if (!type) return;
+      // an action that names its own choices offers those and nothing else, also when there
+      // are none: an ID typed by hand could point at a record the action does not fit
+      const named = action.choices && action.choices[field.name];
       let records = [];
       try {
-        records = action.choices && action.choices[field.name] ? action.choices[field.name](record) : (await listRecords(type)).records;
+        records = named ? await named(record) : (await listRecords(type)).records;
       } catch (error) {
         if (error.status === 401) throw error;
       }
       if (!LABELS[field.name]) field.label = TYPES[type].label;
-      if (records.length) choices[field.name] = records.map((item) => ({ value: item.ID, label: titleOf(type, item) })).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      if (records.length || named) choices[field.name] = records.map((item) => ({ value: item.ID, label: titleOf(type, item) })).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     }),
   );
-  return choices;
+  return { ...choices, ...(action.options || {}) };
 }
 
 /** Asks for the fields of an action, or to confirm it, and makes the call. Resolves to
@@ -176,14 +229,14 @@ export async function runAction(kind, action, record = null) {
   const done = await openForm({
     title: action.label,
     subtitle: record ? (TYPES[kind] ? titleOf(kind, record) : record.name || "") : "",
-    text: action.text || "",
+    text: typeof action.text === "function" ? await action.text(record) : action.text || "",
     fields,
-    values: { ...(action.defaults ? action.defaults() : {}), ...(action.edit ? formValues(fields, record) : {}) },
+    values: { ...(action.defaults ? action.defaults(record) : {}), ...(action.edit ? formValues(fields, record) : {}) },
     choices: await choicesOf(fields, action, record),
     when: action.when || {},
     submit: action.confirm ? action.label : action.edit ? "Save" : action.label,
     danger: Boolean(action.danger),
-    send: (body) => account.api.call(method, path, operation.body ? { ...kept, ...body, ...preset } : undefined),
+    send: (body) => (action.send ? action.send(record, { ...kept, ...body, ...preset }) : account.api.call(method, path, operation.body ? { ...kept, ...body, ...preset } : undefined)),
   });
   if (!done) return null;
   // what the app remembered of the record is out of date now
