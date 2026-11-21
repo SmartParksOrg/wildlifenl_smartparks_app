@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#52735E" />
-    <meta name="description" content="Check that data sent by Smart Parks Protect arrives correctly in WildlifeNL." />
+    <meta name="description" content="See what the WildlifeNL data platform holds: sensor readings and detections, on a map and in a table." />
     <meta name="referrer" content="no-referrer" />
-    <!-- Scripts only from this site and the pinned map library; the page may call any HTTPS API
-         because the WildlifeNL and Protect addresses are settings. -->
+    <!-- Scripts only from this site and the pinned map library; the page may call any HTTPS address
+         because the WildlifeNL API address is a setting and the map tiles come from elsewhere. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; font-src 'self' https:; connect-src https: http://localhost:* http://127.0.0.1:*; worker-src blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https:; font-src 'self' https:; connect-src 'self' https:; worker-src blob:; child-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <title>Smart Parks WildlifeNL check</title>
     <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
@@ -23,7 +23,6 @@
       <defs>
         <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></symbol>
         <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></symbol>
-        <symbol id="i-check" viewBox="0 0 24 24"><path d="M21.8 10A10 10 0 1 1 17 3.3" /><path d="m9 11 3 3L22 4" /></symbol>
         <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></symbol>
         <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" /></symbol>
         <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9" /></symbol>
@@ -109,10 +108,6 @@
             <a class="nav-item" href="#/detections" data-view="detections"><svg class="icon"><use href="#i-camera" /></svg><span>Detections</span></a>
           </div>
           <div class="nav-section">
-            <div class="nav-label">Verify</div>
-            <a class="nav-item" href="#/verify" data-view="verify"><svg class="icon"><use href="#i-check" /></svg><span>Protect check</span></a>
-          </div>
-          <div class="nav-section">
             <div class="nav-label">Settings</div>
             <a class="nav-item" href="#/account" data-view="account"><svg class="icon"><use href="#i-user" /></svg><span>Account</span></a>
           </div>
@@ -179,88 +174,6 @@
               <div class="map" id="detectionsMap"></div>
             </div>
             <div class="card" id="detectionsTable"></div>
-          </section>
-
-          <!-- Protect check -->
-          <section class="view" id="view-verify" hidden>
-            <div class="page-header">
-              <h1>Protect check</h1>
-              <p>Compare the positions Smart Parks Protect holds for a device with the readings WildlifeNL received for its sensor ID.</p>
-            </div>
-            <form id="verifyForm" class="stack">
-              <div class="card stack">
-                <h2><span class="step">1</span>WildlifeNL side</h2>
-                <div class="form-grid">
-                  <label class="field span-2">
-                    <span>Sensor ID</span>
-                    <input id="verifySensor" type="text" list="sensorList" autocomplete="off" spellcheck="false" required placeholder="The ID Protect sends, by default the DevEUI" />
-                  </label>
-                  <label class="field"><span>From</span><input id="verifyFrom" type="datetime-local" required /></label>
-                  <label class="field"><span>To</span><input id="verifyTo" type="datetime-local" required /></label>
-                </div>
-              </div>
-
-              <div class="card stack">
-                <h2><span class="step">2</span>Protect side</h2>
-                <div class="segmented" role="tablist">
-                  <button type="button" role="tab" class="segment active" data-source="server">Protect server</button>
-                  <button type="button" role="tab" class="segment" data-source="file">File or paste</button>
-                </div>
-
-                <div id="protectServer" class="stack">
-                  <div class="form-grid" id="protectLogin">
-                    <label class="field span-2"><span>Protect address</span><input id="protectUrl" type="url" inputmode="url" spellcheck="false" placeholder="https://protect.example.org" /></label>
-                    <label class="field"><span>Email address</span><input id="protectEmail" type="email" autocomplete="username" /></label>
-                    <label class="field"><span>Password</span><input id="protectPassword" type="password" autocomplete="current-password" /></label>
-                    <div class="form-actions"><button class="btn outline" type="button" id="protectConnect">Connect</button></div>
-                  </div>
-                  <div class="form-grid" id="protectPick" hidden>
-                    <label class="field"><span>Project</span><select id="protectProject"></select></label>
-                    <label class="field"><span>Device</span><select id="protectDevice"></select></label>
-                    <div class="form-actions"><button class="btn link" type="button" id="protectDisconnect">Disconnect</button></div>
-                  </div>
-                  <p class="hint">The password goes to your Protect server only and is not stored. The server must list this page's address in <code>CORS_ORIGINS</code>.</p>
-                </div>
-
-                <div id="protectFile" class="stack" hidden>
-                  <label class="field">
-                    <span>Positions file (JSON, GeoJSON or CSV)</span>
-                    <input id="protectFileInput" type="file" accept=".json,.geojson,.csv,.txt,application/json,text/csv" />
-                  </label>
-                  <label class="field">
-                    <span>Or paste the positions</span>
-                    <textarea id="protectPaste" rows="5" spellcheck="false" placeholder='[{"time": "2026-11-21T10:00:00Z", "geometry": {"type": "Point", "coordinates": [5.3, 52.1]}}]'></textarea>
-                  </label>
-                  <p class="hint">Any list with a time and a location works: the answer of Protect's positions API, an export, or CSV with <code>time</code>, <code>latitude</code> and <code>longitude</code> columns.</p>
-                </div>
-              </div>
-
-              <div class="card stack">
-                <h2><span class="step">3</span>Compare</h2>
-                <div class="form-grid">
-                  <label class="field"><span>Time tolerance (seconds)</span><input id="verifySeconds" type="number" min="0" step="any" value="1" required /></label>
-                  <label class="field"><span>Location tolerance (metres)</span><input id="verifyMeters" type="number" min="0" step="any" value="10" required /></label>
-                  <div class="form-actions"><button class="btn primary" type="submit">Compare</button></div>
-                </div>
-              </div>
-            </form>
-            <div class="callout" id="verifyNote" hidden></div>
-            <div id="verifyResult" class="stack" hidden>
-              <div class="tiles" id="verifyTiles"></div>
-              <div class="card map-card">
-                <div class="card-bar">
-                  <strong>Map</strong>
-                  <span class="legend">
-                    <span><i class="dot ok"></i>In both</span>
-                    <span><i class="dot warn"></i>Location differs</span>
-                    <span><i class="dot bad"></i>Missing in WildlifeNL</span>
-                    <span><i class="dot info"></i>Only in WildlifeNL</span>
-                  </span>
-                </div>
-                <div class="map" id="verifyMap"></div>
-              </div>
-              <div class="card" id="verifyTable"></div>
-            </div>
           </section>
 
           <!-- Account -->

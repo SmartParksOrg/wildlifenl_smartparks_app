@@ -1,12 +1,11 @@
-// The user interface: sign-in, the four pages and the glue between them. Pure logic lives in
+// The user interface: sign-in, the three pages and the glue between them. Pure logic lives in
 // lib.js, the servers in api.js, the map in map.js.
 
-import { APP_NAME, ApiError, DEFAULT_API_URL, ProtectClient, SCOPES, WildlifeNlClient } from "./api.js";
-import { STATUS, ago, cellText, columnsOf, comparePositions, flatten, parsePositions, toCsv, toLocalInput, toPoint, toTime, withinWindow } from "./lib.js";
+import { APP_NAME, ApiError, DEFAULT_API_URL, SCOPES, WildlifeNlClient } from "./api.js";
+import { ago, cellText, columnsOf, flatten, toCsv, toLocalInput, toPoint, toTime, withinWindow } from "./lib.js";
 import { MapView } from "./map.js";
 
 const SESSION_KEY = "wnl-session";
-const PROTECT_KEY = "wnl-protect";
 const LEGACY_KEY = "wl_nl_client"; // the single-file app before 2.0.0
 const PAGE_SIZE = 200;
 const HOUR = 3600 * 1000;
@@ -57,7 +56,7 @@ function tiles(target, items) {
   target.replaceChildren(
     ...items.map((item) =>
       el("div", { class: "tile" }, [
-        el("div", { class: "tile-label" }, [item.dot ? el("i", { class: `dot ${item.dot}` }) : null, item.label]),
+        el("div", { class: "tile-label" }, item.label),
         el("div", { class: "tile-value", text: item.value, title: item.value }),
         el("div", { class: "tile-note", text: item.note || " ", title: item.note || "" }),
       ]),
@@ -97,8 +96,6 @@ class DataTable {
     this.rows = [];
     this.raw = [];
     this.columns = [];
-    this.render = {};
-    this.labels = {};
     this.sortKey = null;
     this.sortDir = -1;
     this.shown = PAGE_SIZE;
@@ -124,12 +121,10 @@ class DataTable {
   }
 
   /** @param rows flat objects; `raw` is what Copy JSON gives (the server's own records) */
-  setRows(rows, { columns, sortKey, sortDir = -1, render = {}, labels = {}, raw } = {}) {
+  setRows(rows, { columns, sortKey, sortDir = -1, raw } = {}) {
     this.rows = rows;
     this.raw = raw || rows;
     this.columns = columns || columnsOf(rows);
-    this.render = render;
-    this.labels = labels;
     this.sortKey = sortKey || this.columns[0] || null;
     this.sortDir = sortDir;
     this.draw(true);
@@ -166,7 +161,7 @@ class DataTable {
           return el("th", { "aria-sort": active ? (this.sortDir > 0 ? "ascending" : "descending") : null }, [
             el("button", {
               type: "button",
-              text: `${this.labels[key] || key}${active ? (this.sortDir > 0 ? " ▲" : " ▼") : ""}`,
+              text: `${key}${active ? (this.sortDir > 0 ? " ▲" : " ▼") : ""}`,
               onclick: () => {
                 this.sortDir = active ? -this.sortDir : 1;
                 this.sortKey = key;
@@ -183,9 +178,7 @@ class DataTable {
           "tr",
           {},
           this.columns.map((key) => {
-            const custom = this.render[key] && this.render[key](row[key], row);
-            if (custom instanceof Node) return el("td", {}, custom);
-            const text = custom ?? cellText(row[key]);
+            const text = cellText(row[key]);
             return el("td", { text, title: text.length > 30 ? text : null });
           }),
         ),
@@ -263,7 +256,6 @@ function signOut(message = "") {
   sessionStorage.removeItem(SESSION_KEY);
   session = null;
   api = null;
-  protect = null;
   showAuth(message);
 }
 
@@ -417,7 +409,7 @@ function wireAuth() {
 // ---------------------------------------------------------------------------------------------
 // App frame
 
-const VIEWS = ["readings", "detections", "verify", "account"];
+const VIEWS = ["readings", "detections", "account"];
 const maps = {};
 const tables = {};
 
@@ -454,17 +446,12 @@ function showApp() {
 function resetPages() {
   tables.readings = new DataTable($("readingsTable"), { filename: "wildlifenl-readings", empty: "Pick a sensor and load its readings." });
   tables.detections = new DataTable($("detectionsTable"), { filename: "wildlifenl-detections", empty: "Choose a period and an area and load the detections." });
-  tables.verify = new DataTable($("verifyTable"), { filename: "protect-wildlifenl-check" });
-  for (const id of ["readingsTiles", "detectionsTiles", "verifyTiles"]) $(id).replaceChildren();
-  for (const id of ["readingsNote", "detectionsNote", "verifyNote"]) note($(id), "");
+  for (const id of ["readingsTiles", "detectionsTiles"]) $(id).replaceChildren();
+  for (const id of ["readingsNote", "detectionsNote"]) note($(id), "");
   for (const map of Object.values(maps)) map.setPoints([], { fit: false });
-  $("verifyResult").hidden = true;
   const now = Date.now();
-  for (const [from, to] of [["detectionsFrom", "detectionsTo"], ["verifyFrom", "verifyTo"]]) {
-    $(from).value = toLocalInput(now - 7 * 24 * HOUR);
-    $(to).value = toLocalInput(now + 60 * 1000);
-  }
-  showProtectLogin();
+  $("detectionsFrom").value = toLocalInput(now - 7 * 24 * HOUR);
+  $("detectionsTo").value = toLocalInput(now + 60 * 1000);
 }
 
 const THEMES = { system: ["monitor", "Theme: follows the device"], light: ["sun", "Theme: light"], dark: ["moon", "Theme: dark"] };
@@ -588,7 +575,7 @@ async function loadDetections() {
     tables.detections.setRows(rows, { columns: orderedColumns(rows, DETECTION_COLUMNS), sortKey: "start", raw: detections });
     mapFor("detections").setPoints(
       detections
-        .map((d) => ({ point: toPoint({ time: d.start, location: d.location }), d }))
+        .map((d) => ({ point: toPoint(d, "start"), d }))
         .filter((x) => x.point)
         .map(({ point, d }) => ({
           ...point,
@@ -599,166 +586,6 @@ async function loadDetections() {
     if (!detections.length) note($("detectionsNote"), all.length ? "No detection in the area matches that deployment ID." : "No detections in this period and area. Try a longer period or a larger radius.", "warn");
   } catch (error) {
     note($("detectionsNote"), explain(error), "error");
-  }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Protect check
-
-/** @type {ProtectClient|null} */
-let protect = null;
-let protectSource = "server";
-
-function showProtectLogin() {
-  protect = null;
-  $("protectLogin").hidden = false;
-  $("protectPick").hidden = true;
-  $("protectPassword").value = "";
-  const saved = readStored(localStorage, PROTECT_KEY) || {};
-  $("protectUrl").value = $("protectUrl").value || saved.url || "";
-  $("protectEmail").value = $("protectEmail").value || saved.email || "";
-}
-
-function fillSelect(select, items, label) {
-  select.replaceChildren(...items.map((item) => el("option", { value: item.id, text: label(item) })));
-}
-
-async function loadProtectDevices() {
-  const devices = await protect.devices($("protectProject").value);
-  devices.sort((a, b) => a.name.localeCompare(b.name));
-  fillSelect($("protectDevice"), devices, (d) => [d.name, d.entity_name && `on ${d.entity_name}`, d.serial_number && `(${d.serial_number})`].filter(Boolean).join(" "));
-}
-
-async function connectProtect() {
-  note($("verifyNote"), "");
-  try {
-    const client = new ProtectClient($("protectUrl").value);
-    await client.login($("protectEmail").value.trim(), $("protectPassword").value);
-    const projects = await client.projects();
-    if (!projects.length) throw new ApiError("This Protect account has no projects");
-    protect = client;
-    localStorage.setItem(PROTECT_KEY, JSON.stringify({ url: client.baseUrl, email: $("protectEmail").value.trim() }));
-    fillSelect($("protectProject"), projects, (p) => p.name);
-    await loadProtectDevices();
-    $("protectPassword").value = "";
-    $("protectLogin").hidden = true;
-    $("protectPick").hidden = false;
-  } catch (error) {
-    protect = null;
-    note($("verifyNote"), `Protect: ${error.status === 400 || error.status === 401 ? "the email address or password is not right" : error.message}`, "error");
-  }
-}
-
-/** The Protect positions for the comparison, from the server or from the file or pasted text. */
-async function protectPoints(from, to) {
-  if (protectSource === "server") {
-    if (!protect) throw new ApiError("Connect to Protect first, or switch to File or paste.");
-    const deviceId = $("protectDevice").value;
-    if (!deviceId) throw new ApiError("This Protect project has no devices.");
-    const rows = await protect.positions($("protectProject").value, deviceId, from, to);
-    return { points: rows.map(toPoint).filter(Boolean), skipped: 0, capped: rows.length >= 1000 };
-  }
-  const file = $("protectFileInput").files[0];
-  const text = file ? await file.text() : $("protectPaste").value;
-  if (!text.trim()) throw new ApiError("Choose a file or paste the Protect positions.");
-  let parsed;
-  try {
-    parsed = parsePositions(text);
-  } catch {
-    throw new ApiError("Could not read the positions: the text is not valid JSON or CSV.");
-  }
-  if (!parsed.points.length) throw new ApiError("Found no rows with both a time and a location. CSV needs time, latitude and longitude columns.");
-  return { points: withinWindow(parsed.points, from, to), skipped: parsed.skipped, capped: false };
-}
-
-const STATUS_LABEL = {
-  [STATUS.match]: ["ok", "In both"],
-  [STATUS.moved]: ["warn", "Location differs"],
-  [STATUS.missing]: ["bad", "Missing in WildlifeNL"],
-  [STATUS.extra]: ["info", "Only in WildlifeNL"],
-};
-
-function stateColor(kind) {
-  return getComputedStyle(document.documentElement).getPropertyValue(`--state-${kind}`).trim();
-}
-
-async function runCheck() {
-  const target = $("verifyNote");
-  note(target, "");
-  $("verifyResult").hidden = true;
-  const sensor = $("verifySensor").value.trim();
-  const from = toTime($("verifyFrom").value);
-  const to = toTime($("verifyTo").value);
-  if (!(from < to)) return note(target, "The period must end after it starts.", "error");
-  try {
-    const sent = await protectPoints(from, to);
-    const readings = withinWindow(await api.readings(sensor), from, to, (r) => toTime(r.timestamp));
-    const received = readings.map(toPoint).filter(Boolean);
-    const result = comparePositions(sent.points, received, {
-      toleranceSeconds: Number($("verifySeconds").value),
-      toleranceMeters: Number($("verifyMeters").value),
-    });
-    const { counts } = result;
-    const share = result.sent ? `${Math.round(((counts.match + counts.moved) / result.sent) * 100)}% of what Protect holds` : "";
-    tiles($("verifyTiles"), [
-      { label: "In both", dot: "ok", value: counts.match.toLocaleString(), note: share },
-      { label: "Location differs", dot: "warn", value: counts.moved.toLocaleString(), note: "Same time, another place" },
-      { label: "Missing in WildlifeNL", dot: "bad", value: counts.missing.toLocaleString(), note: `Protect has ${plural(result.sent, "position")}` },
-      { label: "Only in WildlifeNL", dot: "info", value: counts.extra.toLocaleString(), note: `WildlifeNL has ${plural(result.received, "position")}` },
-    ]);
-
-    const remarks = [];
-    if (!result.sent) remarks.push("Protect has no positions for this device in this period.");
-    else if (!result.received) remarks.push(`WildlifeNL has no positions for sensor ${sensor} in this period. Check the sensor ID and the integration's deliveries in Protect.`);
-    else if (counts.missing + counts.moved === 0) remarks.push(`All ${plural(result.sent, "Protect position")} arrived in WildlifeNL with the same time and place.`);
-    else remarks.push(`${counts.missing.toLocaleString()} of ${plural(result.sent, "Protect position")} did not arrive and ${counts.moved.toLocaleString()} arrived with another location.`);
-    if (counts.extra) remarks.push(`WildlifeNL holds ${plural(counts.extra, "position")} that Protect does not have: an earlier version of a corrected position, or data from another source.`);
-    const withoutLocation = readings.length - received.length;
-    if (withoutLocation) remarks.push(`${plural(withoutLocation, "reading")} without a location (temperature only) are left out.`);
-    if (sent.skipped) remarks.push(`${plural(sent.skipped, "row")} of the Protect data had no time or location and are left out.`);
-    if (sent.capped) remarks.push("Protect returned its maximum of 1000 positions, so older ones in this period are not compared. Choose a shorter period.");
-    const good = result.sent > 0 && counts.missing + counts.moved === 0;
-    note(target, remarks.join(" "), good && !sent.capped ? "ok" : result.sent ? "warn" : "error");
-
-    const iso = (t) => new Date(t).toISOString();
-    const rows = result.rows.map((row) => ({
-      status: row.status,
-      time: iso(row.t),
-      "protect.latitude": row.protect ? row.protect.lat : null,
-      "protect.longitude": row.protect ? row.protect.lng : null,
-      "wildlifenl.latitude": row.wildlifenl ? row.wildlifenl.lat : null,
-      "wildlifenl.longitude": row.wildlifenl ? row.wildlifenl.lng : null,
-      distance_m: row.distance == null ? null : Math.round(row.distance * 10) / 10,
-      time_difference_s: row.timeDelta,
-    }));
-    tables.verify.setRows(rows, {
-      sortKey: "time",
-      labels: { distance_m: "distance (m)", time_difference_s: "time difference (s)" },
-      render: {
-        status: (value) => {
-          const [kind, label] = STATUS_LABEL[value];
-          return el("span", { class: `badge ${kind}` }, [el("i", { class: `dot ${kind}` }), label]);
-        },
-      },
-    });
-    $("verifyResult").hidden = false;
-    mapFor("verify").setPoints(
-      result.rows.map((row) => {
-        const place = row.protect || row.wildlifenl;
-        const [kind, label] = STATUS_LABEL[row.status];
-        return {
-          t: row.t,
-          lat: place.lat,
-          lng: place.lng,
-          color: stateColor(kind),
-          title: label,
-          lines: [formatMoment(row.t), row.distance == null ? "" : `${row.distance.toFixed(1)} m apart`].filter(Boolean),
-        };
-      }),
-    );
-  } catch (error) {
-    const text = explain(error);
-    if (text) note(target, text, "error");
   }
 }
 
@@ -785,7 +612,7 @@ function drawAccount() {
   ]);
   const access = [
     ["List deployed sensors", SCOPES.deployments],
-    ["Sensor readings and the Protect check", SCOPES.readings],
+    ["Sensor readings", SCOPES.readings],
     ["Detections", SCOPES.detections],
   ];
   $("accessTable").replaceChildren(
@@ -822,7 +649,6 @@ function wireApp() {
     });
   submit("readingsForm", loadReadings);
   submit("detectionsForm", loadDetections);
-  submit("verifyForm", runCheck);
 
   $("readingsTrack").addEventListener("change", (event) => mapFor("readings").setTrack(event.target.checked));
   $("detectionsUseMap").addEventListener("click", () => {
@@ -830,27 +656,6 @@ function wireApp() {
     if (!center) return;
     $("detectionsLat").value = center.lat.toFixed(5);
     $("detectionsLng").value = center.lng.toFixed(5);
-  });
-
-  for (const segment of document.querySelectorAll(".segment")) {
-    segment.addEventListener("click", () => {
-      protectSource = segment.dataset.source;
-      for (const other of document.querySelectorAll(".segment")) {
-        other.classList.toggle("active", other === segment);
-        other.setAttribute("aria-selected", String(other === segment));
-      }
-      $("protectServer").hidden = protectSource !== "server";
-      $("protectFile").hidden = protectSource !== "file";
-    });
-  }
-  $("protectConnect").addEventListener("click", (event) => busy(event.target, connectProtect));
-  $("protectDisconnect").addEventListener("click", showProtectLogin);
-  $("protectProject").addEventListener("change", async () => {
-    try {
-      await loadProtectDevices();
-    } catch (error) {
-      note($("verifyNote"), `Protect: ${error.message}`, "error");
-    }
   });
 
   $("themeButton").addEventListener("click", () => {

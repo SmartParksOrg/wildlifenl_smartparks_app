@@ -2,7 +2,7 @@
   "name": "wildlifenl-smartparks-app",
   "private": true,
   "type": "module",
-  "description": "Static web app that checks Smart Parks Protect data in WildlifeNL. No dependencies, no build step.",
+  "description": "Static web app that shows the sensor readings and detections WildlifeNL holds. No dependencies, no build step.",
   "license": "MIT",
   "scripts": {
     "test": "node --test",

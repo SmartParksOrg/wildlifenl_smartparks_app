@@ -11,7 +11,6 @@ A rewrite of the single-file client into a small app with the look of Smart Park
 ### Added
 
 - Sign in with a code by email (`POST /auth/`, then `PUT /auth/`), with the option to stay signed in on the device. Signing in with an existing token still works.
-- Protect check: compares the positions Smart Parks Protect holds for a device with the readings WildlifeNL received, from a Protect server or from a JSON, GeoJSON or CSV file. Shows what is in both, what differs in location, what is missing and what only WildlifeNL has.
 - Detections page: detections in a period and a circle on the map.
 - Account page: profile, roles, what each role allows, and the app version.
 - Light and dark theme that follow the device or the user's choice.

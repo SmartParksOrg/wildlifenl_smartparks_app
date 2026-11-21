@@ -12,13 +12,13 @@ How the app is built and why. Read [CONVENTIONS.md](CONVENTIONS.md) first.
 ## Files
 
 ```
-index.html            The whole page: sign-in and the four views
+index.html            The whole page: sign-in and the three views
 VERSION               The version, shown on the Account page
 assets/app.css        Design tokens and all styling
 assets/img/           Logo, favicon and sign-in photographs (from Smart Parks Protect)
 assets/js/theme.js    Sets the theme before the first paint
-assets/js/lib.js      Pure functions: parsing, comparing, CSV. No DOM, no network
-assets/js/api.js      WildlifeNlClient and ProtectClient
+assets/js/lib.js      Pure functions: times, flattening, CSV. No DOM, no network
+assets/js/api.js      WildlifeNlClient
 assets/js/map.js      MapView, a small wrapper around MapLibre
 assets/js/app.js      The user interface
 tests/lib.test.js     Unit tests for lib.js
@@ -63,18 +63,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | --- | --- | --- |
 | `wnl-session` | `localStorage` when "Keep me signed in" is on, else `sessionStorage` | API address, token, email, user ID, name, roles |
 | `wnl-theme` | `localStorage` | `light`, `dark` or `system` |
-| `wnl-protect` | `localStorage` | Protect address and email address. Never the password or the token |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
-
-The Protect access token lives in memory only (`ProtectClient.token`) and is gone on reload.
-
-## Protect check
-
-`ProtectClient` uses four calls of the Protect API: `POST /api/v1/auth/login` (form encoded `username` and `password`), `GET /api/v1/projects`, `GET /api/v1/devices?project_id=`, and `GET /api/v1/projects/{id}/positions?device_id=&from=&to=&limit=1000`. Positions come with `time` and `geometry` as a GeoJSON point. The Protect server must list the page's origin in `CORS_ORIGINS`.
-
-`toPoint` in `lib.js` reads a point from a WildlifeNL reading, a Protect position, a GeoJSON feature or a flat row with time, latitude and longitude columns. `parsePositions` accepts pasted or uploaded JSON, GeoJSON and CSV.
-
-`comparePositions` sorts both sides by time and pairs every Protect position with the nearest unused WildlifeNL reading within the time tolerance (default 1 second). A pair within the location tolerance (default 10 metres) is a match. Each reading is used once, so a duplicate on one side shows up as missing or extra. What Protect sends is described in its integration documentation (`docs/integrations/wildlifenl/index.md`).
 
 ## Map
 
@@ -91,7 +80,7 @@ If the script fails to load, the map area says so and the tables keep working.
 
 ## Content security policy
 
-`index.html` carries a policy in a `<meta>` tag, because GitHub Pages cannot send headers. Scripts load only from this site and `unpkg.com`; there are no inline scripts, which is why the theme code is its own file. `connect-src` allows any HTTPS address because the WildlifeNL and Protect addresses are settings, plus `localhost` for a local Protect. `worker-src blob:` is for MapLibre's worker. A new external resource needs a new entry there.
+`index.html` carries a policy in a `<meta>` tag, because GitHub Pages cannot send headers. Scripts load only from this site and `unpkg.com`; there are no inline scripts, which is why the theme code is its own file. `connect-src` allows this site (also when served locally over HTTP) and any HTTPS address, because the WildlifeNL API address is a setting and the map tiles come from OpenFreeMap. `worker-src blob:` is for MapLibre's worker. A new external resource needs a new entry there.
 
 ## Tests
 
@@ -101,7 +90,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, load readings, load detections, run a Protect check from a file, sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, load readings, load detections, sign out, reload while signed in.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 
