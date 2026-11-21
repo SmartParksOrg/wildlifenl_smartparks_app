@@ -250,6 +250,8 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 
 The layers panel (`pages/map-layers.js`) follows the one of Protect: a tab per kind, and `drawTab` gives every tab the same search, arrangement, sorting, folding groups with a three-state tick, and the line to show, hide, unfold or fold all. What the person chose is kept under `wnl-map-layers`. `LiveMap.setItems(kind, items)` takes what each layer shows; an item carries `selected`, and the map tells the page what was clicked through `onPick(kind, id)`.
 
+On a screen under 768 px wide the panels rise from the bottom and there is room for one: picking something closes the layers panel, and `goTo` puts the place in the upper part of the map so its panel does not cover it. Held sideways (`orientation: landscape`) the panels stand at the left under the Layers button.
+
 The live map page (`pages/map.js`) places its controls as Protect does: the Layers button top left, the tools as square buttons top right (`.map-tools`), MapLibre's zoom, north and locate bottom right, and the panels in one column beside the tools (`.map-cards`), where the layers panel shrinks so the selected sensor always fits under it. On a phone the column rises from the bottom. Measuring is a mode of `LiveMap`: while it is on, a click adds a point to a dashed line and the page adds up the legs.
 
 A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for a dark ground.

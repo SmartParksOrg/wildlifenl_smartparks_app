@@ -401,7 +401,7 @@ function sensorPanel(sensor, asSensor) {
     ]),
     el("div", { class: "row" }, [
       iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { on: tracked }),
-      iconButton("locate", "Centre the map here", () => sensor.place && map.flyTo(sensor.place), { disabled: !sensor.place }),
+      iconButton("locate", "Centre the map here", () => sensor.place && goTo(sensor.place), { disabled: !sensor.place }),
       led ? iconButton("sensor", "Open the sensor", null, { href: buildHash("sensors", sensor.id) }) : iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }),
       iconButton("chart", "Open in the data explorer", null, { href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }),
     ]),
@@ -429,7 +429,7 @@ function personPanel(id) {
     ]),
     el("div", { class: "row" }, [
       iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(key), { on: tracked }),
-      iconButton("locate", "Centre the map here", () => last && map.flyTo(last), { disabled: !last }),
+      iconButton("locate", "Centre the map here", () => last && goTo(last), { disabled: !last }),
       iconButton("user", "Open the person", null, { href: recordHash("people", id) }),
     ]),
   ];
@@ -446,7 +446,7 @@ function nearPanel(animal, place) {
       ["Last position", formatMoment(toTime(animal.locationTimestamp))],
       ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
     ]),
-    el("div", { class: "row" }, [iconButton("locate", "Centre the map here", () => map.flyTo(place)), known ? iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }) : null]),
+    el("div", { class: "row" }, [iconButton("locate", "Centre the map here", () => goTo(place)), known ? iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }) : null]),
   ];
 }
 
@@ -467,7 +467,7 @@ function contactPanel(contact, place) {
       ["Messages", (contact.conveyances || []).length ? plural(contact.conveyances.length, "message") : ""],
       ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
     ]),
-    el("div", { class: "row" }, [iconButton("list", "Open the contact", null, { href: recordHash("contacts", contact.ID) }), iconButton("locate", "Centre the map here", () => map.flyTo(place))]),
+    el("div", { class: "row" }, [iconButton("list", "Open the contact", null, { href: recordHash("contacts", contact.ID) }), iconButton("locate", "Centre the map here", () => goTo(place))]),
   ];
 }
 
@@ -483,7 +483,7 @@ function alarmPanel(alarm, place) {
       ["Messages", (alarm.conveyances || []).length ? `${plural(alarm.conveyances.length, "message")} sent` : ""],
       ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
     ]),
-    el("div", { class: "row" }, [iconButton("list", "Open the alarm", null, { href: recordHash("alarms", alarm.ID) }), iconButton("locate", "Centre the map here", () => map.flyTo(place))]),
+    el("div", { class: "row" }, [iconButton("list", "Open the alarm", null, { href: recordHash("alarms", alarm.ID) }), iconButton("locate", "Centre the map here", () => goTo(place))]),
   ];
 }
 
@@ -503,7 +503,7 @@ function detectorPanel(detector) {
     ]),
     el("div", { class: "row" }, [
       iconButton("list", "Open its detections", null, { href: buildHash("detections", "", { detector: detector.name }) }),
-      iconButton("locate", "Centre the map here", () => map.flyTo(detector)),
+      iconButton("locate", "Centre the map here", () => goTo(detector)),
       picture ? iconButton("external", "Open the newest picture", null, { href: picture, external: true }) : null,
     ]),
   ];
@@ -525,7 +525,7 @@ function reportPanel(report, place) {
       ["Reported by", report.user ? link(recordHash("people", report.user.ID), report.user.name) : ""],
       ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
     ]),
-    el("div", { class: "row" }, [iconButton("list", "Open the report", null, { href: recordHash("reports", report.ID) }), iconButton("locate", "Centre the map here", () => map.flyTo(place))]),
+    el("div", { class: "row" }, [iconButton("list", "Open the report", null, { href: recordHash("reports", report.ID) }), iconButton("locate", "Centre the map here", () => goTo(place))]),
   ];
 }
 
@@ -680,8 +680,20 @@ function placeOf(kind, id) {
   return null;
 }
 
+/** A phone has room for one panel above the map. */
+const NARROW = window.matchMedia("(max-width: 767px)");
+
+/** Goes to a place. On a phone held upright the panels rise from the bottom, so the place is
+ * put in the upper part of the map, where it stays in sight. */
+function goTo(place) {
+  const upright = NARROW.matches && window.innerHeight > window.innerWidth;
+  map.flyTo(place, upright ? $("liveMap").clientHeight * 0.22 : 0);
+}
+
 async function select(kind, id, fly = false) {
   selected = { kind, id };
+  // on a phone what is picked takes the place of the layers, so the map stays in sight
+  if (kind && id && NARROW.matches) showCard("layerPanel", false);
   // a row that is picked is shown, also a sensor on an animal, which is off until then
   if (kind && id) showRow(kind, id, kind === "sensors" && Boolean((sensorById(id) || {}).animal));
   redraw();
@@ -690,7 +702,7 @@ async function select(kind, id, fly = false) {
     const area = kind === "areas" && areas.find((a) => a.id === id);
     if (area && area.points.length > 2) map.fit(area.points, { animate: true });
     const place = placeOf(kind, id);
-    if (place) map.flyTo(place);
+    if (place) goTo(place);
   }
   if (kind !== "animals" && kind !== "sensors") return;
   try {
@@ -928,7 +940,7 @@ export async function show({ query }) {
   }
   if (query.at) {
     const [lat, lng] = query.at.split(",").map(Number);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) map.flyTo({ lat, lng });
+    if (Number.isFinite(lat) && Number.isFinite(lng)) goTo({ lat, lng });
   }
   if (Object.keys(query).length) history.replaceState(null, "", buildHash("map"));
 }

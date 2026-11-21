@@ -510,8 +510,10 @@ export class LiveMap extends BaseMap {
     this.draw();
   }
 
-  flyTo(place) {
-    if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600 });
+  /** Goes to a place. `up` puts the place that many pixels above the middle of the map, for
+   * when a panel covers the lower part. */
+  flyTo(place, up = 0) {
+    if (this.map) this.map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(this.map.getZoom(), 13), duration: 600, offset: [0, -up] });
   }
 
   sources() {

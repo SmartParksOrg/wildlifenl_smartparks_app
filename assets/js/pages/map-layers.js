@@ -207,6 +207,7 @@ function markTabs() {
     button.setAttribute("aria-selected", String(on));
     $(`layerTab-${button.dataset.tab}`).hidden = !on;
   }
+  open.scrollIntoView({ block: "nearest", inline: "nearest" }); // the row of tabs scrolls on a narrow screen
   return open.dataset.tab;
 }
 

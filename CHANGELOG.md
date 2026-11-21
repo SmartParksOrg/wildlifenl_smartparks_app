@@ -4,6 +4,18 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Changed
+
+- On a phone the live map shows one panel at a time: picking something closes the layers, and the picked place stays in sight above its panel. Held sideways, the panels stand at the left.
+- On a small phone the top bar shows the name of the app in full and leaves out the logo; the chip for location sharing keeps its icon only.
+- The tabs of the layers panel keep their whole names and scroll sideways when they do not fit.
+
+### Fixed
+
+- The page of a record was wider than a phone screen, so the right edge of its cards was cut off.
+- In a form on a phone the latitude and longitude of a place were squeezed beside the button; the button now stands under them.
+- The panel of a picked animal could cover the whole map and lose its top on a low screen.
+
 ## 2.5.0 - 2026-11-21
 
 The core of the other WildlifeNL apps in this one: the admin tool, the research portal, the report app and the animal radar.
