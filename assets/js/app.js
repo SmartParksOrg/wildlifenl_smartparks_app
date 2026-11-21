@@ -14,8 +14,10 @@ import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
 import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
 import { resetDetections } from "./detections.js";
+import { closeForm, wireForm } from "./form.js";
 import { resetPeople } from "./people.js";
 import { TYPES, canList, recordHash, resetRecords } from "./records.js";
+import { resetRights } from "./rights.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
 
@@ -364,6 +366,7 @@ async function start() {
   wireAuth();
   wireSidebar();
   wireSearch();
+  wireForm();
   drawThemeButton();
   $("themeButton").addEventListener("click", () => {
     const order = Object.keys(THEMES);
@@ -374,6 +377,8 @@ async function start() {
   window.addEventListener("hashchange", route);
   account.onSignOut = (message) => {
     if ($("searchDialog").open) $("searchDialog").close();
+    closeForm();
+    resetRights();
     resetStore();
     resetDetections();
     resetPeople();

@@ -4,9 +4,10 @@
 
 import { buildHash, toTime, webLink, words } from "../lib.js";
 import { MapView } from "../map.js";
-import { TYPES, getRecord, linkOf, listRecords, recordHash, relatedRecords, titleOf } from "../records.js";
+import { TYPES, canList, getRecord, linkOf, listRecords, recordHash, relatedRecords, titleOf } from "../records.js";
 import { explain, hasScope } from "../session.js";
 import { $, DataTable, el, facts, formatMoment, note, plural, toast } from "../ui.js";
+import { drawActions } from "../writes.js";
 
 const PLACE_FIELDS = ["place", "location", "startLocation", "endLocation"];
 
@@ -105,6 +106,8 @@ async function showList(type) {
   $("recordsTitle").textContent = def.plural;
   $("recordsDescription").textContent = def.description;
   note($("recordsNote"), "");
+  // what the account may add here; a new record opens on its own page
+  drawActions($("recordsActions"), type, "list", null, (result) => (result && result.ID != null ? (location.hash = recordHash(type, result.ID)) : showList(type)));
   if (!listTable) listTable = new DataTable($("recordsTable"), { filename: "wildlifenl" });
   listTable.filename = `wildlifenl-${type}`;
   listTable.setRows([], { empty: "Loading…" });
@@ -160,6 +163,7 @@ async function showRecord(type, id) {
   $("recordOnMap").hidden = true;
   $("recordMapCard").hidden = true;
   $("recordFacts").replaceChildren();
+  $("recordActions").replaceChildren();
   extra.replaceChildren();
   note($("recordNote"), "");
   let record;
@@ -177,6 +181,12 @@ async function showRecord(type, id) {
   }
   $("recordTitle").textContent = titleOf(type, record);
   $("recordSubtitle").textContent = def.label;
+  // what the account may change; afterwards the page is read again, or left when the record is gone
+  drawActions($("recordActions"), type, "record", record, (result, action) => {
+    if (!action.gone) return showRecord(type, id);
+    if (canList(type)) location.hash = recordHash(type);
+    else history.back();
+  });
   $("recordCopy").onclick = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(record, null, 2));
@@ -186,7 +196,8 @@ async function showRecord(type, id) {
     }
   };
 
-  const fields = Object.entries(record).filter(([field]) => field !== "$schema");
+  // the token for notifications of the phone app is of no use to a reader
+  const fields = Object.entries(record).filter(([field]) => field !== "$schema" && field !== "firebaseCloudMessagingToken");
   const lists = fields.filter(([field, value]) => Array.isArray(value) && value.length && value.every((item) => item && typeof item === "object" && !isPoint(item)) && !value.every((item) => linkOf(field, item)));
   facts($("recordFacts"), fields.filter(([field]) => !lists.some(([name]) => name === field)).map(([field, value]) => [words(field), nodeOf(field, value)]));
 

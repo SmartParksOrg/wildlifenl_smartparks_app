@@ -7,6 +7,7 @@ import { recordHash } from "../records.js";
 import { explain } from "../session.js";
 import { addSensor, canListSensors, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
+import { drawActions } from "../writes.js";
 
 /** The two lists: which sensors they hold, their columns and where a row leads. */
 const LISTS = {
@@ -126,6 +127,8 @@ function wire() {
 export async function show({ page }) {
   if (!tables.sensors) wire();
   current = page === "animals" ? "animals" : "sensors";
+  // a new animal has no sensor yet, so it opens on its own page, where a sensor is put on it
+  if (current === "animals") drawActions($("animalsActions"), "animals", "list", null, (animal) => (animal && animal.ID ? (location.hash = buildHash("animals", animal.ID)) : reload(true)));
   $("sensorsAddInput").value = "";
   await reload();
 }

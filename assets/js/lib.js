@@ -339,7 +339,7 @@ function isList(schema) {
 
 /** A field or table name of the API in plain words: `locationTimestamp` is "Location timestamp". */
 export function words(name) {
-  const spaced = String(name).replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/ID$/, " ID").trim();
+  const spaced = String(name).replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/\s*ID$/, " ID").trim();
   return (spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()).replace(/\bid\b/gi, "ID");
 }
 
@@ -440,4 +440,149 @@ export function coverPlaces(places, radius) {
   const centres = [];
   for (const place of places) if (!centres.some((centre) => distanceMeters(centre, place) <= radius)) centres.push({ lat: place.lat, lng: place.lng });
   return centres;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Writing: which calls the API offers, who may make them and the form of a call
+
+/** Every call of the API from its OpenAPI document: `{method, path, summary, roles, open,
+ * body}`. `roles` are the roles that may make the call, none meaning every signed-in account;
+ * `open` says the call needs no token; `body` is the name of the schema it takes. */
+export function apiOperations(openapi) {
+  const operations = [];
+  for (const [path, item] of Object.entries(openapi.paths || {})) {
+    for (const [method, operation] of Object.entries(item)) {
+      if (!["get", "post", "put", "patch", "delete"].includes(method)) continue;
+      const security = operation.security || openapi.security || [];
+      const content = (operation.requestBody && operation.requestBody.content) || {};
+      operations.push({
+        method: method.toUpperCase(),
+        path,
+        summary: operation.summary || "",
+        roles: [...new Set(security.flatMap((need) => Object.values(need).flat()))],
+        open: !security.some((need) => Object.keys(need).some(Boolean)),
+        body: refName((content["application/json"] || Object.values(content)[0] || {}).schema),
+      });
+    }
+  }
+  return operations;
+}
+
+/** The summary of a call in the words of this app: "Add BorneSensorDeployment" is
+ * "Add sensor deployment". */
+export function operationLabel(summary) {
+  const text = String(summary)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/\binteraction type\b/g, "report type")
+    .replace(/\binteraction\b/g, "report")
+    .replace(/\bborne sensor\b/g, "sensor")
+    .replace(/\bnew living lab\b/g, "living lab")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const LONG_TEXTS = ["description", "text", "notes", "advice", "behaviour", "roleInNature"];
+
+function fieldOf(schemas, name, schema, required) {
+  const ref = refName(schema);
+  const types = [].concat(schema.type || []);
+  const type = types.find((t) => t !== "null") || "";
+  const field = { name, label: words(name), required, nullable: types.includes("null"), description: schema.description || "" };
+  if (ref === "Point") return { ...field, kind: isList(schema) ? "outline" : "point" };
+  if (ref && schemas[ref]) return { ...field, kind: isList(schema) ? "list" : "group", fields: schemaFields(schemas, ref) };
+  if (schema.enum) return { ...field, kind: "choice", options: schema.enum.filter((option) => option != null) };
+  if (type === "boolean") return { ...field, kind: "yesno" };
+  if (type === "integer" || type === "number") return { ...field, kind: type, min: schema.minimum, max: schema.maximum };
+  const kind = { "date-time": "moment", date: "date", email: "email", uri: "url" }[schema.format] || (LONG_TEXTS.includes(name) ? "longtext" : "text");
+  return { ...field, kind, minLength: schema.minLength, pattern: schema.pattern };
+}
+
+function schemaFields(schemas, schemaName) {
+  const schema = schemas[schemaName] || {};
+  const required = schema.required || [];
+  return Object.entries(schema.properties || {})
+    .filter(([name, property]) => name !== "$schema" && !property.readOnly)
+    .map(([name, property]) => fieldOf(schemas, name, property, required.includes(name)));
+}
+
+/**
+ * The fields of the form for a schema of the API, without the ones only the API sets. A field
+ * is `{name, label, kind, required, nullable, description}` and, by kind, `options`, `min`,
+ * `max`, `minLength`, `pattern` or `fields`. The kinds: `text`, `longtext`, `email`, `url`,
+ * `integer`, `number`, `yesno`, `choice`, `moment`, `date`, `point`, `outline` (a list of
+ * points), `group` (details with fields of their own) and `list` (several such details).
+ */
+export function formFields(openapi, schemaName) {
+  return schemaFields((openapi.components && openapi.components.schemas) || {}, schemaName);
+}
+
+/** A moment of the API as the value of a `datetime-local` input, in the time of the device. */
+export function localInput(moment) {
+  const t = toTime(moment);
+  if (!Number.isFinite(t)) return "";
+  return new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+/** What a form shows for a record: per field its value, where `speciesID` is also found as
+ * the ID of `species`, the way the API returns what it takes. */
+export function formValues(fields, record) {
+  const values = {};
+  for (const field of fields) {
+    let value = record ? record[field.name] : undefined;
+    const inner = /^(.+)ID$/.exec(field.name);
+    if (value == null && inner && record && record[inner[1]] && typeof record[inner[1]] === "object") value = record[inner[1]].ID;
+    if (value == null) continue;
+    if (field.kind === "group") values[field.name] = formValues(field.fields, value);
+    else if (field.kind === "list") values[field.name] = [].concat(value).map((item) => formValues(field.fields, item));
+    else values[field.name] = value;
+  }
+  return values;
+}
+
+function empty(value) {
+  return value == null || value === "" || (typeof value === "number" && Number.isNaN(value));
+}
+
+function valueOf(field, value) {
+  if (field.kind === "yesno") return Boolean(value);
+  if (field.kind === "group") return value ? formBody(field.fields, value) : undefined;
+  if (field.kind === "list") return Array.isArray(value) ? value.map((item) => formBody(field.fields, item)) : undefined;
+  if (field.kind === "outline") return Array.isArray(value) && value.length ? value.map((point) => ({ latitude: Number(point.latitude), longitude: Number(point.longitude) })) : undefined;
+  if (field.kind === "point") {
+    if (!value || (empty(value.latitude) && empty(value.longitude))) return undefined;
+    const point = { latitude: Number(value.latitude), longitude: Number(value.longitude) };
+    if (empty(value.latitude) || empty(value.longitude) || !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) throw new Error(`${field.label} needs a latitude and a longitude.`);
+    return point;
+  }
+  if (empty(value)) return undefined;
+  if (field.kind === "integer" || field.kind === "number") {
+    const number = Number(value);
+    if (!Number.isFinite(number) || (field.kind === "integer" && !Number.isInteger(number))) throw new Error(`${field.label} must be a ${field.kind === "integer" ? "whole " : ""}number.`);
+    return number;
+  }
+  if (field.kind === "moment") {
+    const t = toTime(value);
+    if (!Number.isFinite(t)) throw new Error(`${field.label} is not a date and time.`);
+    return new Date(t).toISOString();
+  }
+  return typeof value === "string" ? value.trim() : value;
+}
+
+/**
+ * The body of a call from what a form holds: numbers as numbers, moments in UTC, and an empty
+ * field left out. Where the API asks for a field and accepts it empty, it is sent as `null`
+ * or as an empty text. Any other field the API needs throws an error a person can read.
+ */
+export function formBody(fields, values) {
+  const body = {};
+  for (const field of fields) {
+    const value = valueOf(field, values ? values[field.name] : undefined);
+    if (value !== undefined && value !== "") body[field.name] = value;
+    else if (field.required && field.nullable && field.kind !== "outline") body[field.name] = null;
+    else if (field.required && ["text", "longtext"].includes(field.kind) && !field.minLength) body[field.name] = "";
+    else if (field.required) throw new Error(`${field.label} is needed.`);
+  }
+  return body;
 }

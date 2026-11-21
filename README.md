@@ -1,6 +1,6 @@
 # WildlifeNL Protect
 
-A small web app that shows what the [WildlifeNL](https://wildlifenl.nl) data platform holds: sensor readings and detections, on a map and in a table. Smart Parks uses it to check by hand that the data [Smart Parks Protect](https://github.com/SmartParksOrg/smartparks-protect) sends to WildlifeNL has arrived.
+A small web app that shows what the [WildlifeNL](https://wildlifenl.nl) data platform holds: sensor readings and detections, on a map and in a table. Where your account may, it also changes things: it adds an animal, puts a sensor on it, draws a zone or sets up an experiment. Smart Parks uses it to check by hand that the data [Smart Parks Protect](https://github.com/SmartParksOrg/smartparks-protect) sends to WildlifeNL has arrived.
 
 Open it: **https://smartparksorg.github.io/wildlifenl_smartparks_app/**
 
@@ -26,7 +26,7 @@ The pages follow the structure of Smart Parks Protect. An animal is what people 
 | Living labs, Zones | The research areas with their boundary and visits, and the zones you drew |
 | Experiments | The studies with their questionnaires, messages, responses and more |
 | Species | The species WildlifeNL knows |
-| Account, About | Your roles and what they allow; what the app is |
+| Account, About | Your roles and what they allow you to read and to change; what the app is |
 
 Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The app has a light and a dark theme and works on a phone.
 
@@ -48,6 +48,24 @@ WildlifeNL decides per role what an account may read, and the navigation only sh
 | Species, living labs, report types, roles | Any account |
 
 An account without `herd-manager` can still add a sensor by its ID on the Sensors page; added sensors are remembered in the browser. For a Protect device the ID is what its integration sends: by default the device's primary identity (DevEUI, IMEI or serial), see `sensor_id_source` in the integration's settings. WildlifeNL keeps readings even before a herd manager has registered the sensor on an animal.
+
+### What your account can change
+
+The app reads from WildlifeNL itself which changes it accepts and which roles each one asks for, on the server you signed in to. Where your roles allow a change, a button for it stands on the page it belongs to. The Account page lists every change with whether your account may make it.
+
+| To change | Where | Role |
+| --- | --- | --- |
+| Add an animal, put a sensor on an animal | Animals, the page of an animal | `herd-manager` |
+| Draw a zone, add or remove its species, deactivate it | Zones, the page of a zone | `land-user` or `wildlife-manager` |
+| Make a report: a sighting, damage or a collision | Reports | Any account |
+| Add an experiment, change, end or delete it, add its questionnaires, questions, answer options and messages | Experiments and the pages under it | `researcher`, and only for your own experiments |
+| Add or change a species, a living lab or a report type | Species, Living labs, Report types | `administrator` |
+| Add a person, give or take away a role | People, the page of a person | `administrator` |
+| Change your own profile | Account | Any account |
+
+A form asks for exactly what WildlifeNL takes, checks it before it is sent, and shows the answer of WildlifeNL when it refuses. A place is typed or clicked on a map, an area is drawn on it. Deleting and deactivating ask first.
+
+The app does not send readings, detections, tracking readings, contacts or responses to questionnaires; those come from collars, camera traps and the phone apps. It also cannot delete your account.
 
 ### Records are linked
 
@@ -131,7 +149,7 @@ Run the tests with `npm test` (Node 20 or newer, nothing to install).
 
 ## Documentation
 
-- [DEVELOPERS.md](DEVELOPERS.md): how the code is organised, the API calls, sign-in and storage, how to update the map library.
+- [DEVELOPERS.md](DEVELOPERS.md): how the code is organised, the API calls, how changes are made, sign-in and storage, how to update the map library.
 - [CONTRIBUTING.md](CONTRIBUTING.md) and [CONVENTIONS.md](CONVENTIONS.md): how to work on this repository.
 - [CHANGELOG.md](CHANGELOG.md): what changed per version.
 - [SECURITY.md](SECURITY.md): how to report a security problem and how the app handles tokens.

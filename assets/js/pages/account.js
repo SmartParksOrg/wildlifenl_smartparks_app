@@ -1,10 +1,44 @@
-// The account: profile, roles and what they allow.
+// The account: profile, roles and what they allow, to read and to change.
 
 import { SCOPES } from "../api.js";
+import { operationLabel } from "../lib.js";
+import { loadApi, writeOperations } from "../rights.js";
 import { account, explain, hasScope, refreshProfile, signOut } from "../session.js";
-import { $, busy, el, facts, toast } from "../ui.js";
+import { $, busy, el, facts, note, toast } from "../ui.js";
+import { drawActions, inApp } from "../writes.js";
 
 let wired = false;
+
+function badge(ok, yes, no) {
+  return el("span", { class: `badge ${ok ? "ok" : "bad"}` }, [el("i", { class: `dot ${ok ? "ok" : "bad"}` }), ok ? yes : no]);
+}
+
+/** What the account may change: every call of the API that writes, with the roles the API
+ * itself names for it on this server. */
+async function drawRights() {
+  const table = $("rightsTable");
+  note($("rightsNote"), "");
+  try {
+    await loadApi();
+  } catch (error) {
+    const text = explain(error);
+    if (text) note($("rightsNote"), `Could not read what your account may change: ${text}`, "error");
+    return;
+  }
+  const calls = writeOperations()
+    .map((operation) => ({ operation, label: operationLabel(operation.summary), ok: hasScope(operation.roles) }))
+    .sort((a, b) => Number(b.ok) - Number(a.ok) || a.label.localeCompare(b.label));
+  table.replaceChildren(
+    el("thead", {}, el("tr", {}, ["What", "Needs one of these roles", "Your account", "In this app"].map((text) => el("th", { text })))),
+    el(
+      "tbody",
+      {},
+      calls.map(({ operation, label, ok }) =>
+        el("tr", {}, [el("td", { text: label }), el("td", { text: operation.roles.join(", ") || "Any account" }), el("td", {}, badge(ok, "Allowed", "Not allowed")), el("td", { text: inApp(operation.method, operation.path) ? "Yes" : "No" })]),
+      ),
+    ),
+  );
+}
 
 function draw() {
   const { session } = account;
@@ -32,11 +66,16 @@ function draw() {
       "tbody",
       {},
       access.map(([what, needed]) => {
-        const ok = hasScope(needed);
-        return el("tr", {}, [el("td", { text: what }), el("td", { text: needed.join(", ") }), el("td", {}, el("span", { class: `badge ${ok ? "ok" : "bad"}` }, [el("i", { class: `dot ${ok ? "ok" : "bad"}` }), ok ? "Allowed" : "Not allowed"]))]);
+        return el("tr", {}, [el("td", { text: what }), el("td", { text: needed.join(", ") }), el("td", {}, badge(hasScope(needed), "Allowed", "Not allowed"))]);
       }),
     ),
   );
+  drawRights();
+  // the profile as WildlifeNL holds it now, read when the form opens
+  drawActions($("accountActions"), "account", "record", () => account.api.profile(), async () => {
+    await refreshProfile();
+    draw();
+  });
 }
 
 function wire() {

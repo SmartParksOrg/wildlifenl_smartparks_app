@@ -2,6 +2,7 @@
 // API's own description and drawn as boxes in a column per subject.
 
 import { databaseModel } from "../lib.js";
+import { loadApi } from "../rights.js";
 import { account, explain } from "../session.js";
 import { tableHash } from "../records.js";
 import { $, el, note } from "../ui.js";
@@ -127,7 +128,7 @@ export async function show() {
   if (model && server === baseUrl) return;
   note($("databaseNote"), "");
   try {
-    model = databaseModel(await account.api.openapi());
+    model = databaseModel(await loadApi());
     server = baseUrl;
     selected = "";
     drawGraph();

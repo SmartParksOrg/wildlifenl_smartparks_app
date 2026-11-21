@@ -11,6 +11,7 @@ import { recordHash } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { addSensor, loadReadings, loadSensors, removeSensor, sensorByAnimal, sensorById } from "../store.js";
 import { $, DataTable, busy, el, facts, formatMoment, note, plural } from "../ui.js";
+import { drawActions } from "../writes.js";
 
 const HOUR = 3600 * 1000;
 const READING_COLUMNS = ["timestamp", "location.latitude", "location.longitude", "altitude", "temperature", "accelero.x", "accelero.y", "accelero.z", "userID", "sensorID"];
@@ -54,6 +55,9 @@ function drawHeader(sensor) {
   const keep = $("sensorKeep");
   keep.hidden = asAnimal || Boolean(sensor && !sensor.added);
   keep.textContent = sensor ? "Remove from my sensors" : "Add to my sensors";
+  // what the account may change about the animal; the page then shows the animal's new sensor
+  if (asAnimal && animal) drawActions($("sensorActions"), "animals", "record", animal, () => show({ page: "animals", id: animal.ID }));
+  else $("sensorActions").replaceChildren();
   // the card of the side the page is about comes first
   $("sensorAnimalCard").style.order = asAnimal ? -1 : 1;
 }
@@ -186,6 +190,7 @@ async function showLoneAnimal(animalId) {
   $("sensorTitle").textContent = "Animal";
   $("sensorSubtitle").textContent = "";
   for (const target of ["sensorOther", "sensorKeep"]) $(target).hidden = true;
+  $("sensorActions").replaceChildren();
   note($("sensorNote"), "This animal is not on one of the sensors you see, so there is no track or reading to show.", "warn");
   if (!hasScope(SCOPES.animal)) return;
   try {
@@ -197,6 +202,7 @@ async function showLoneAnimal(animalId) {
       ["Species", animal.species ? el("a", { href: recordHash("species", animal.species.ID), text: animal.species.commonName || animal.species.name }) : ""],
       ["Animal ID", animal.ID],
     ]);
+    drawActions($("sensorActions"), "animals", "record", animal, () => show({ page: "animals", id: animal.ID }));
   } catch (error) {
     const text = explain(error);
     if (text) note($("sensorNote"), text, "error");

@@ -329,8 +329,14 @@ export class MapView extends BaseMap {
     this.describe = () => ["", []];
     this.showTrack = false;
     this.area = [];
+    /** set to hear where the map is clicked; the points then have no popup */
+    this.onClick = null;
     if (!this.map) return;
+    this.map.on("click", (event) => {
+      if (this.onClick) this.onClick({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+    });
     this.map.on("click", "points", (event) => {
+      if (this.onClick) return;
       const feature = event.features && event.features[0];
       const point = feature && this.ordered[feature.properties.index];
       if (point) this.popup(feature.geometry.coordinates, popupHtml(...this.describe(point)));
@@ -353,11 +359,11 @@ export class MapView extends BaseMap {
     this.draw();
   }
 
-  /** Draws the outline of an area, `{lat, lng}` points, and shows it whole. */
-  setArea(points) {
+  /** Draws the outline of an area, `{lat, lng}` points, and shows it whole unless `fit` is off. */
+  setArea(points, { fit = true } = {}) {
     this.area = points;
     this.draw();
-    this.fit(points);
+    if (fit) this.fit(points);
   }
 
   sources() {

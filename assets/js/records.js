@@ -44,6 +44,11 @@ async function knownPeople() {
   await loadPeople();
   const all = new Map();
   if (hasScope(SCOPES.profiles)) for (const profile of await account.api.list("/profiles/")) all.set(String(profile.ID), profile);
+  else {
+    // every account may read its own profile
+    const mine = await account.api.profile();
+    if (mine && mine.ID) all.set(String(mine.ID), mine);
+  }
   for (const [key, record] of seen) if (key.startsWith("people|") && !all.has(String(record.ID))) all.set(String(record.ID), record);
   for (const id of [...people.tracks.keys(), ...people.names.keys()]) if (id && !all.has(String(id))) all.set(String(id), { ID: id, name: personName(id) });
   return [...all.values()].map((person) => ({ ...person, positions: (people.tracks.get(person.ID) || []).length || "" }));
@@ -205,19 +210,21 @@ export const TYPES = {
     label: "Person",
     plural: "People",
     nav: "people",
-    description: "The people the app knows of: recorded by the recreation app, or named in a report, a contact or a message",
+    description: "The people the app knows of, with their profile where you may read it: recorded by the recreation app, or named in a report, a contact or a message",
     list: knownPeople,
     needs: SCOPES.profiles,
     ownOnly: true,
-    get: (id) => (hasScope(SCOPES.profiles) ? `/profile/${id}` : `/user/${id}`),
-    columns: ["name", "positions", "email", "roles"],
+    // the profile of anyone for an administrator and the own one for every account; of
+    // other people only the name
+    get: (id) => (hasScope(SCOPES.profiles) ? `/profile/${id}` : String(id) === String(account.session.userID) ? "/profile/me/" : `/user/${id}`),
+    columns: ["name", "email", "roles", "gender", "dateOfBirth", "postcode", "natureVisitAvgWeeklyFrequency", "positions"],
     related: [
       { label: "Where the recreation app recorded this person", load: (record) => (people.tracks.get(record.ID) || []).map((point) => point.raw).reverse(), columns: ["timestamp", "location"], onMap: true },
       { label: "Contacts with animals", type: "contacts", load: ofPerson(() => people.contacts), columns: ["start", "end", "borneSensorDeployment", "startLocation"] },
       { label: "Messages received", type: "conveyances", load: ofPerson(() => people.conveyances), columns: ["timestamp", "message", "alarm", "animal"] },
       { label: "Reports made", type: "reports", load: ofPerson(() => [...detections.reports.values()]), columns: ["moment", "type", "species", "notes"] },
     ],
-    hint: "Only administrators see every account. Others see the people in the data they may read.",
+    hint: "Only administrators see every account and every profile. Others see their own profile and the names of the people in the data they may read.",
   },
   roles: { table: "Role", label: "Role", plural: "Roles", nav: "people", description: "What an account may do", path: "/roles/", columns: ["name"] },
 };
@@ -270,6 +277,17 @@ function keep(type, record) {
     const inner = FIELD_TYPES[field];
     if (inner) for (const item of [].concat(value || [])) if (item && typeof item === "object") keep(inner, item);
   }
+}
+
+/** Drops what is remembered of a record, so the next read asks WildlifeNL again. */
+export function forget(type, id) {
+  seen.delete(`${type}|${id}`);
+}
+
+/** Remembers a record as WildlifeNL returned it after a change, in place of what was known. */
+export function remember(type, record) {
+  forget(type, idOf(record));
+  keep(type, record);
 }
 
 /** Where a field points: `{href, text}` for a link, or null when it is no link. */

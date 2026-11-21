@@ -13,7 +13,7 @@ import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
-import { choices, drawTab, isCustomised, isShown, openTab, resetChoices, show as showRow } from "./map-layers.js";
+import { choices, drawTab, isCustomised, isShown, offerTabs, openTab, resetChoices, show as showRow } from "./map-layers.js";
 
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
@@ -233,7 +233,13 @@ function drawPanel() {
     drawFinds();
     drawAreas();
   };
-  const tab = (key, items, options) => drawTab(key, items, { target: $(`layerTab-${key}`), onChange: again, onDraw: offerReset, onPick: pick(key), ...options });
+  // a tab without rows is left out, unless the person can fill it from the panel
+  const fillable = { sensors: true, detectors: hasScope(SCOPES.detections), events: hasScope(SCOPES.reports) };
+  const empty = [];
+  const tab = (key, items, options) => {
+    if (!items.length && !fillable[key]) empty.push(key);
+    drawTab(key, items, { target: $(`layerTab-${key}`), onChange: again, onDraw: offerReset, onPick: pick(key), ...options });
+  };
   const locate = (kind, id, disabled = false) => rowButton("locate", "Show on map", () => select(kind, id, true), { disabled });
   const trackButton = (key) => {
     const tracked = tracks.has(key);
@@ -318,7 +324,7 @@ function drawPanel() {
     })),
     { noun: "area", groupLabel: "Per kind", empty: "No living labs or zones to show." },
   );
-  $("layerFind").hidden = !["detectors", "events"].includes(choices.tab);
+  $("layerFind").hidden = !["detectors", "events"].includes(offerTabs(empty));
 }
 
 // ---------------------------------------------------------------------------------------------

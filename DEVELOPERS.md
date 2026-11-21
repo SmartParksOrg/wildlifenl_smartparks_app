@@ -25,6 +25,9 @@ assets/js/store.js       The sensors and their readings, fetched once and kept i
 assets/js/detections.js  Detections and reports: searching an area, remembered places
 assets/js/people.js      People on the move: tracking readings, contacts, sent messages, alarms
 assets/js/records.js     Every other kind of record: where it is read and what it links to
+assets/js/rights.js      The API's own description, read once: its calls and the roles they ask for
+assets/js/writes.js      What a person can change: the actions per kind of record
+assets/js/form.js        The dialog with the form of a change, or the question to confirm one
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
@@ -83,6 +86,28 @@ Links come from two places. `FIELD_TYPES` says which kind of record a field hold
 
 To add a kind of record: add it to `TYPES`, add the field names that point at it to `FIELD_TYPES`, and add it to `DATA_GROUPS` in `lib.js` so the Database page names it. A navigation entry with `data-type` is hidden when `canList` says the account can read nothing behind it.
 
+## Changing things
+
+The app reads the roles for a write call, and the fields the call takes, from the OpenAPI document of the server it is signed in to (`GET /openapi.json`). Nothing about a write call is copied into the code except which ones the app offers and where.
+
+- `rights.js` fetches the document once per session (`loadApi`, which the Database page shares) and keeps the calls by method and path. `apiOperations` in `lib.js` reads per call the roles (`security`), whether it needs a token and the schema of its body.
+- `writes.js` holds `ACTIONS`: per kind of record the buttons, each one call (`["POST", "/zone/"]`), above the list or on the page of a record. A button is drawn when the server has the call, the account has one of its roles and `show(record)` agrees. `drawActions(target, kind, where, record, after)` is all a page calls.
+- `formFields` in `lib.js` turns the schema of a body into fields: it skips what is `readOnly`, and names a kind per field (text, number, moment, choice, place, outline, details, list of details). `formValues` fills a form from a record (`speciesID` from `species.ID`, the way the API returns what it takes) and `formBody` turns the form back into the body. Both have tests.
+- `form.js` draws the fields in a native `<dialog>`. The browser checks what is needed, the shortest length, the pattern and the bounds; `formBody` checks the rest. A field named after a kind of record (`REFERS` in `writes.js`) is a list to pick from. A place is two numbers or a click on the map of the dialog; an outline is drawn there corner by corner. Optional details are shown by a rule of the action (`when`) or ticked by the person.
+- An error of the API is shown in the dialog, which stays open with what was typed.
+- After a change `runAction` drops what `records.js` remembered of the record (`forget`), keeps the answer when it is the record itself (`remember`), and the page reads again.
+
+Facts from the API's source that shaped the actions:
+
+- The calls that delete an answer option, a question, a questionnaire, a message or an experiment name no role, but the API only carries them out for the owner of the experiment. The app asks for `researcher` there (`needs`) and hides the buttons on an experiment of someone else (`own`).
+- An experiment, and what hangs under it, can only be changed before it starts.
+- A new sensor deployment ends every earlier deployment of that sensor at the new start.
+- `PUT /profile/me/` replaces the whole profile, also the token for notifications the phone app stored (`firebaseCloudMessagingToken`). The form does not show that field and sends it back as it was (`hide`).
+- A zone and a living lab need an outline of three or more points. A deactivated zone cannot be switched on again.
+- A report of type 1, 2 or 3 needs the details of a sighting, damage or a collision.
+
+To offer another call: add an action to `ACTIONS`. To check by hand, sign in on the test server. Not offered on purpose: the calls of machines and phone apps (readings, detections, tracking readings, contacts, responses) and deleting the own profile.
+
 ## Sensors and readings
 
 `store.js` is the one place that knows which sensors exist. A sensor comes from `GET /borne-sensor-deployment/active/` (herd managers only) or from the IDs the user added, kept in `localStorage` under `wnl-sensors`. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
@@ -108,8 +133,9 @@ The app follows the OpenAPI document the API serves at its root (`/openapi.json`
 | `GET /borne-sensor-deployment/active/` | Suggestions for the sensor ID | `herd-manager` |
 | `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `land-user`, `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /detections/` | Detections by `start`, `end`, `latitude`, `longitude`, `radius` (metres, at most 10000) | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /openapi.json` | The Database page, and the roles and fields of every call that changes something | none |
 
-The roles are also in `SCOPES` in `api.js`; the Account page draws its access table from it. When the API changes, update `SCOPES`, this table and the README together.
+The roles for reading are also in `SCOPES` in `api.js`; the Account page draws its first table from it. When the API changes, update `SCOPES`, this table and the README together. The roles for changing are not in the code: they are read from the server, see "Changing things".
 
 Errors are problem documents (`application/problem+json` with `title`, `detail` and sometimes `errors`). `problemText` in `lib.js` turns them into one sentence. A list endpoint answers `null` when there is nothing; `WildlifeNlClient.list` turns that into an empty array.
 
@@ -205,7 +231,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, the two tables on the Account page, a change on the test server (a report, a zone drawn on the map, the own profile), sign out, reload while signed in.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 

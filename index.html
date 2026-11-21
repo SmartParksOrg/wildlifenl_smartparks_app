@@ -285,6 +285,7 @@
               <p>The animals that carry a sensor, with where and when they were last seen</p>
             </div>
             <div class="page-actions">
+              <span class="row" id="animalsActions"></span>
               <button class="btn outline" type="button" id="animalsRefresh">Refresh</button>
             </div>
           </div>
@@ -335,6 +336,7 @@
               <a class="btn outline" id="sensorOnMap"><svg class="icon"><use href="#i-pin" /></svg>Show on map</a>
               <a class="btn outline" id="sensorExplore"><svg class="icon"><use href="#i-chart" /></svg>Data explorer</a>
               <a class="btn outline" id="sensorOther" hidden></a>
+              <span class="row" id="sensorActions"></span>
               <button class="btn outline" type="button" id="sensorRefresh">Refresh</button>
               <button class="btn outline" type="button" id="sensorKeep" hidden></button>
             </div>
@@ -443,6 +445,7 @@
               <h1 id="recordsTitle"></h1>
               <p id="recordsDescription"></p>
             </div>
+            <div class="page-actions" id="recordsActions"></div>
           </div>
           <div class="page-body">
             <div class="callout" id="recordsNote" hidden></div>
@@ -460,6 +463,7 @@
               <a class="btn outline" id="recordBack"></a>
               <a class="btn outline" id="recordOnMap" hidden><svg class="icon"><use href="#i-pin" /></svg>Show on map</a>
               <button class="btn outline" type="button" id="recordCopy">Copy JSON</button>
+              <span class="row" id="recordActions"></span>
             </div>
           </div>
           <div class="page-body">
@@ -505,8 +509,8 @@
             <div class="card stack">
               <h2>What this is</h2>
               <p>WildlifeNL Protect shows the data the WildlifeNL platform holds: the animals that carry a collar or another sensor, their positions and measurements, the detections of camera traps, the reports people make and the areas all of this happens in.</p>
-              <p>Smart Parks made it to see that the data Smart Parks Protect sends to WildlifeNL arrives, and to give partners a quick look at that data. It only reads; it changes nothing in WildlifeNL.</p>
-              <p>The app runs in your browser and talks directly to WildlifeNL. What you see depends on the roles of your WildlifeNL account.</p>
+              <p>Smart Parks made it to see that the data Smart Parks Protect sends to WildlifeNL arrives, and to give partners a quick look at that data. Where your account may, you can also change things: add an animal and put a sensor on it, draw a zone, make a report, or set up an experiment.</p>
+              <p>The app runs in your browser and talks directly to WildlifeNL. What you see and what you can change depend on the roles of your WildlifeNL account.</p>
             </div>
             <div class="card stack">
               <h2>Pages</h2>
@@ -517,7 +521,7 @@
                 <dt><a href="#/detections">Detections</a></dt><dd>What camera traps and other sensors saw around a point.</dd>
                 <dt><a href="#/explore">Data explorer</a></dt><dd>Measurements over time, as charts and as a table.</dd>
                 <dt><a href="#/database">Database</a></dt><dd>What WildlifeNL stores and how it hangs together.</dd>
-                <dt><a href="#/account">Account</a></dt><dd>Your roles and what they allow.</dd>
+                <dt><a href="#/account">Account</a></dt><dd>Your roles and what they allow you to read and to change.</dd>
               </dl>
             </div>
             <div class="card stack">
@@ -532,7 +536,7 @@
           <div class="page-header">
             <div>
               <h1>Account</h1>
-              <p>Your WildlifeNL account, what it may read and where this app connects to</p>
+              <p>Your WildlifeNL account, what it may read and change, and where this app connects to</p>
             </div>
           </div>
           <div class="page-body">
@@ -542,14 +546,21 @@
               <div class="row">
                 <button class="btn outline" type="button" id="copyToken">Copy token</button>
                 <button class="btn outline" type="button" id="refreshProfile">Refresh</button>
+                <span class="row" id="accountActions"></span>
                 <button class="btn destructive" type="button" id="signOutButton2">Sign out</button>
               </div>
               <p class="hint">Signing out removes the token from this browser. WildlifeNL tokens do not expire, so the same token works again after the next sign-in.</p>
             </div>
             <div class="card stack">
-              <h2>Access</h2>
+              <h2>What your account may read</h2>
               <p class="hint">WildlifeNL decides per role what an account may read. Ask the WildlifeNL administrator for a role you miss.</p>
               <div class="table-scroll"><table class="table" id="accessTable"></table></div>
+            </div>
+            <div class="card stack">
+              <h2>What your account may change</h2>
+              <p class="hint">Every change WildlifeNL accepts, with the roles it asks for on this server. Where a role allows a change, the app shows a button for it on the page it belongs to. Some changes WildlifeNL only carries out for the owner of the record. The changes not in this app are made by other systems, such as a collar that sends its readings or the phone apps.</p>
+              <div class="callout" id="rightsNote" hidden></div>
+              <div class="table-scroll"><table class="table" id="rightsTable"></table></div>
             </div>
           </div>
         </section>
@@ -561,6 +572,26 @@
       <input type="search" id="searchInput" placeholder="Search an animal, a sensor or a page…" autocomplete="off" spellcheck="false" />
       <div class="search-results" id="searchResults" role="listbox"></div>
       <div class="search-foot"><span><kbd>↑</kbd><kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></div>
+    </dialog>
+
+    <dialog class="form-dialog" id="formDialog" aria-labelledby="formTitle">
+      <form class="stack" id="formForm">
+        <div>
+          <h2 id="formTitle"></h2>
+          <p class="hint" id="formSubtitle"></p>
+        </div>
+        <p id="formText"></p>
+        <div class="stack" id="formFields"></div>
+        <div class="stack" id="formMapBlock" hidden>
+          <span class="hint" id="formMapHint"></span>
+          <div class="map form-map" id="formMap"></div>
+        </div>
+        <div class="callout error" id="formError" role="alert" hidden></div>
+        <div class="form-actions end">
+          <button class="btn outline" type="button" id="formCancel">Cancel</button>
+          <button class="btn primary" type="submit" id="formSubmit">Save</button>
+        </div>
+      </form>
     </dialog>
 
     <div class="toasts" id="toasts" aria-live="polite"></div>

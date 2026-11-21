@@ -4,6 +4,22 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- The app can change things in WildlifeNL, where the account may: add an animal and put a sensor on it, draw a zone and choose its species, make a report, add, change, end and delete an experiment with its questionnaires, questions, answer options and messages, add and change species, living labs and report types, add a person and give or take away a role, and change the own profile. A button stands on the page the change belongs to.
+- The Account page lists every change WildlifeNL accepts, the roles it asks for and whether the account may make it. The app reads this from the server it is signed in to.
+- A form follows what WildlifeNL takes for a change. A place is typed or clicked on a map and an area is drawn on it. A refusal by WildlifeNL is shown in the form.
+
+- The People page shows the profile of a person: email address, roles, gender, date of birth, postcode and how often the person visits nature. An administrator sees it for everyone, every other account for itself.
+
+### Changed
+
+- The layers panel of the live map leaves out a tab that has nothing to show, such as Animals for an account that may not list them. Sensors stays, and Detectors and Events stay for an account that can search for them.
+
+### Fixed
+
+- A field name that ends in ID, such as the sensor ID, had two spaces in its label.
+
 ## 2.4.0 - 2026-11-21
 
 ### Added

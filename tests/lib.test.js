@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, webLink, circleGrid, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, circleGrid, coverPlaces, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -220,4 +220,127 @@ test("webLink lets only http and https addresses through", () => {
   assert.equal(webLink("data:text/html,x"), "");
   assert.equal(webLink("https://a b"), "");
   assert.equal(webLink(null), "");
+});
+
+// ---------------------------------------------------------------------------------------------
+// Writing
+
+const WRITE_API = {
+  security: [{ auth: [] }],
+  paths: {
+    "/auth/": { post: { summary: "Authenticate", security: [{ "": [] }] } },
+    "/zone/": { post: { summary: "Add Zone", security: [{ auth: ["land-user", "wildlife-manager"] }], requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/ZoneRecord" } } } } } },
+    "/answer/{id}": { delete: { summary: "Delete Answer", security: [{ auth: [] }] }, parameters: [] },
+    "/species/": { get: { summary: "Get All Species" } },
+  },
+  components: {
+    schemas: {
+      Point: { properties: { latitude: { type: "number" }, longitude: { type: "number" } } },
+      Info: { required: ["sex"], properties: { sex: { type: "string", enum: ["unknown", "female"] } } },
+      ZoneRecord: {
+        required: ["ID", "name", "definition", "hardware", "advice"],
+        properties: {
+          $schema: { type: "string" },
+          ID: { type: "string", format: "uuid", readOnly: true },
+          name: { type: "string", minLength: 2, description: "The name." },
+          definition: { type: ["array", "null"], items: { $ref: "#/components/schemas/Point" } },
+          place: { $ref: "#/components/schemas/Point" },
+          start: { type: "string", format: "date-time" },
+          count: { type: "integer", minimum: 1, maximum: 5 },
+          notes: { type: "string" },
+          advice: { type: "string" },
+          agreed: { type: "boolean" },
+          hardware: { type: ["string", "null"], pattern: "^[0-9A-F]{2}$" },
+          speciesID: { type: "string", format: "uuid" },
+          report: { $ref: "#/components/schemas/Info" },
+          animals: { type: ["array", "null"], items: { $ref: "#/components/schemas/Info" } },
+        },
+      },
+    },
+  },
+};
+
+test("apiOperations reads the roles and the body of every call", () => {
+  const calls = apiOperations(WRITE_API);
+  assert.equal(calls.length, 4);
+  const byKey = Object.fromEntries(calls.map((call) => [`${call.method} ${call.path}`, call]));
+  assert.deepEqual(byKey["POST /zone/"].roles, ["land-user", "wildlife-manager"]);
+  assert.equal(byKey["POST /zone/"].body, "ZoneRecord");
+  assert.equal(byKey["POST /zone/"].open, false);
+  assert.deepEqual(byKey["DELETE /answer/{id}"].roles, []);
+  assert.equal(byKey["DELETE /answer/{id}"].body, "");
+  assert.equal(byKey["POST /auth/"].open, true);
+  // a call without its own rule follows the rule of the whole API
+  assert.equal(byKey["GET /species/"].open, false);
+});
+
+test("operationLabel uses the words of the app", () => {
+  assert.equal(operationLabel("Add BorneSensorDeployment"), "Add sensor deployment");
+  assert.equal(operationLabel("Update Interaction Type"), "Update report type");
+  assert.equal(operationLabel("Add Interaction"), "Add report");
+  assert.equal(operationLabel("Add New LivingLab"), "Add living lab");
+  assert.equal(operationLabel("Add a Role to a User"), "Add a role to a user");
+});
+
+test("formFields describes a schema and leaves out what the API sets", () => {
+  const fields = formFields(WRITE_API, "ZoneRecord");
+  const kinds = Object.fromEntries(fields.map((field) => [field.name, field.kind]));
+  assert.deepEqual(kinds, { name: "text", definition: "outline", place: "point", start: "moment", count: "integer", notes: "longtext", advice: "longtext", agreed: "yesno", hardware: "text", speciesID: "text", report: "group", animals: "list" });
+  const name = fields.find((field) => field.name === "name");
+  assert.deepEqual([name.label, name.required, name.minLength, name.description], ["Name", true, 2, "The name."]);
+  assert.equal(fields.find((field) => field.name === "hardware").nullable, true);
+  assert.deepEqual(fields.find((field) => field.name === "report").fields.map((field) => [field.name, field.kind, field.options]), [["sex", "choice", ["unknown", "female"]]]);
+  assert.deepEqual(formFields(WRITE_API, "Missing"), []);
+});
+
+test("formBody turns what a form holds into the body of a call", () => {
+  const fields = formFields(WRITE_API, "ZoneRecord");
+  const body = formBody(fields, {
+    name: " Veluwe ",
+    definition: [{ latitude: 52, longitude: 5 }, { latitude: "52.1", longitude: "5.1" }],
+    place: { latitude: "52.2", longitude: "5.2" },
+    start: "2026-11-21T10:00:00Z",
+    count: "3",
+    notes: "",
+    agreed: false,
+    hardware: "",
+    speciesID: "",
+    report: null,
+    animals: [{ sex: "female" }],
+  });
+  assert.deepEqual(body, {
+    name: "Veluwe",
+    definition: [{ latitude: 52, longitude: 5 }, { latitude: 52.1, longitude: 5.1 }],
+    place: { latitude: 52.2, longitude: 5.2 },
+    start: "2026-11-21T10:00:00.000Z",
+    count: 3,
+    advice: "",
+    agreed: false,
+    hardware: null,
+    animals: [{ sex: "female" }],
+  });
+});
+
+test("formBody says which field is missing or wrong", () => {
+  const fields = formFields(WRITE_API, "ZoneRecord");
+  const good = { name: "Veluwe", definition: [{ latitude: 52, longitude: 5 }] };
+  assert.throws(() => formBody(fields, { ...good, name: "" }), /Name is needed/);
+  assert.throws(() => formBody(fields, { ...good, definition: [] }), /Definition is needed/);
+  assert.throws(() => formBody(fields, { ...good, place: { latitude: "52", longitude: "" } }), /Place needs a latitude and a longitude/);
+  assert.throws(() => formBody(fields, { ...good, count: "1.5" }), /Count must be a whole number/);
+  assert.throws(() => formBody(fields, { ...good, animals: [{ sex: "" }] }), /Sex is needed/);
+});
+
+test("formValues reads a record the way the form of its call needs it", () => {
+  const fields = formFields(WRITE_API, "ZoneRecord");
+  const values = formValues(fields, { ID: "z1", name: "Veluwe", species: { ID: "s1", name: "Canis lupus" }, report: { sex: "female", other: 1 }, animals: [{ sex: "unknown" }], definition: [{ latitude: 52, longitude: 5 }] });
+  assert.deepEqual(values, { name: "Veluwe", speciesID: "s1", report: { sex: "female" }, animals: [{ sex: "unknown" }], definition: [{ latitude: 52, longitude: 5 }] });
+  assert.deepEqual(formValues(fields, null), {});
+});
+
+test("localInput gives the moment in the time of the device", () => {
+  const text = localInput("2026-11-21T10:00:00Z");
+  assert.match(text, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  assert.equal(new Date(text).toISOString(), "2026-11-21T10:00:00.000Z");
+  assert.equal(localInput(""), "");
 });

@@ -195,14 +195,31 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
   if (onDraw) onDraw();
 }
 
-/** Switches the panel to a tab and marks its button. */
-export function openTab(tab) {
-  choices.tab = tab;
-  saveChoices();
-  for (const button of document.querySelectorAll("#layerTabs [role=tab]")) {
-    const on = button.dataset.tab === tab;
+/** Marks the open tab and shows its rows. A tab that is left out makes way for the first
+ * one that is there; the choice of the person is kept for when it is back. Returns the tab
+ * that is open. */
+function markTabs() {
+  const buttons = [...document.querySelectorAll("#layerTabs [role=tab]")];
+  const open = buttons.find((button) => button.dataset.tab === choices.tab && !button.hidden) || buttons.find((button) => !button.hidden) || buttons[0];
+  for (const button of buttons) {
+    const on = button === open;
     button.classList.toggle("active", on);
     button.setAttribute("aria-selected", String(on));
     $(`layerTab-${button.dataset.tab}`).hidden = !on;
   }
+  return open.dataset.tab;
+}
+
+/** Switches the panel to a tab and marks its button. */
+export function openTab(tab) {
+  choices.tab = tab;
+  saveChoices();
+  return markTabs();
+}
+
+/** Leaves out the tabs in `empty`: the ones with nothing to show and no way to get
+ * something. Returns the tab that is open. */
+export function offerTabs(empty) {
+  for (const button of document.querySelectorAll("#layerTabs [role=tab]")) button.hidden = empty.includes(button.dataset.tab);
+  return markTabs();
 }
