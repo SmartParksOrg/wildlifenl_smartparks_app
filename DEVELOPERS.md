@@ -28,13 +28,17 @@ assets/js/records.js     Every other kind of record: where it is read and what i
 assets/js/rights.js      The API's own description, read once: its calls and the roles they ask for
 assets/js/writes.js      What a person can change: the actions per kind of record
 assets/js/form.js        The dialog with the form of a change, or the question to confirm one
+assets/js/answering.js   Asking the questions of the questionnaire that belongs to a report
+assets/js/research.js    What a researcher does in more than one call: delete with what hangs under, copy
+assets/js/sharing.js     Sending the own position while the person has switched that on
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
 assets/js/app.js         Sign-in, the frame (top bar, folding navigation, search) and the router
 assets/js/pages/*.js     One module per page: map (with map-layers), sensors (the Animals and Sensors
                          lists), sensor (the animal page and the sensor page), explore, detections,
-                         records (every other list and record), database, about, account
+                         records (every other list and record), research (the cards of an
+                         experiment and a questionnaire), database, about, account
 tests/lib.test.js        Unit tests for lib.js
 .nojekyll                Tells GitHub Pages to serve the files untouched
 ```
