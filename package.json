@@ -1,0 +1,14 @@
+{
+  "name": "wildlifenl-smartparks-app",
+  "private": true,
+  "type": "module",
+  "description": "Static web app that checks Smart Parks Protect data in WildlifeNL. No dependencies, no build step.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test",
+    "start": "python3 -m http.server 8080"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

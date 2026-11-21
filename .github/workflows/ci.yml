@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # no install step: the app and its tests have no dependencies
+      - run: npm test
+      - name: Syntax check of the browser scripts
+        run: for f in assets/js/*.js; do node --check "$f"; done
+      - name: Every local file the page refers to exists
+        run: |
+          for path in $(grep -oE '(href|src)="assets/[^"]+"' index.html | cut -d'"' -f2); do
+            test -f "$path" || { echo "missing: $path"; exit 1; }
+          done
