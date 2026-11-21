@@ -16,6 +16,9 @@ const FONT = ["Noto Sans Regular"]; // the glyphs OpenFreeMap serves
 const GREEN = "#52735E";
 const GREEN_DARK = "#2F4A3A";
 const CORAL = "#D9825F";
+const MAX_TRACK_DOTS = 2000;
+/** WildlifeNL answers a detection query within at most this many metres of a point. */
+export const MAX_RADIUS_M = 10000;
 
 /** One colour per track, in the order Protect uses, and a lighter set of the same hues for a
  * dark ground. A track is known by its slot, so it keeps its hue when the ground changes. */
@@ -150,18 +153,24 @@ export class MapView extends BaseMap {
   constructor(container) {
     super(container);
     this.points = [];
+    this.ordered = [];
+    this.describe = () => ["", []];
     this.showTrack = false;
     if (!this.map) return;
     this.map.on("click", "points", (event) => {
       const feature = event.features && event.features[0];
-      if (feature) this.popup(feature.geometry.coordinates, feature.properties.html);
+      const point = feature && this.ordered[feature.properties.index];
+      if (point) this.popup(feature.geometry.coordinates, popupHtml(...this.describe(point)));
     });
     this.pointer("points");
   }
 
-  /** @param {{lat:number,lng:number,t?:number,title?:string,lines?:string[]}[]} points */
-  setPoints(points, { fit = true } = {}) {
+  /** @param {{lat:number,lng:number,t?:number}[]} points
+   * @param describe gives `[title, lines]` for the popup of one point; it runs on a click,
+   * so a track of thousands of points costs nothing up front */
+  setPoints(points, { fit = true, describe } = {}) {
     this.points = points;
+    if (describe) this.describe = describe;
     this.draw();
     if (fit) this.fit(points);
   }
@@ -173,9 +182,10 @@ export class MapView extends BaseMap {
 
   sources() {
     const ordered = [...this.points].sort((a, b) => (a.t || 0) - (b.t || 0));
-    const latest = ordered[ordered.length - 1];
+    this.ordered = ordered;
+    const last = ordered.length - 1;
     return {
-      points: collection(ordered.map((p) => pointFeature(p.lng, p.lat, { latest: p === latest ? 1 : 0, html: popupHtml(p.title, p.lines) }))),
+      points: collection(ordered.map((p, index) => pointFeature(p.lng, p.lat, { latest: index === last ? 1 : 0, index }))),
       track: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: this.showTrack && ordered.length > 1 ? ordered.map((p) => [p.lng, p.lat]) : [] } },
     };
   }
@@ -203,7 +213,8 @@ export class MapView extends BaseMap {
 /** The live map: a labelled marker per sensor, a coloured track per chosen sensor and the
  * detections. The page hears about clicks through `onSensor`, `onTrackPoint` and `onNothing`. */
 export class LiveMap extends BaseMap {
-  constructor(container, { onSensor, onNothing }) {
+  /** `describePoint(track, point)` gives `[title, lines]` for the popup of a track point. */
+  constructor(container, { onSensor, onNothing, describePoint }) {
     super(container);
     this.sensors = [];
     this.tracks = [];
@@ -215,7 +226,9 @@ export class LiveMap extends BaseMap {
       const hit = hits[0];
       if (!hit) return onNothing();
       if (hit.layer.id === "sensors") return onSensor(hit.properties.id);
-      this.popup(hit.geometry.coordinates, hit.properties.html);
+      if (hit.layer.id === "detections") return this.popup(hit.geometry.coordinates, hit.properties.html);
+      const track = this.tracks[hit.properties.track];
+      if (track) this.popup(hit.geometry.coordinates, popupHtml(...describePoint(track, track.points[hit.properties.point])));
     });
     for (const layer of ["sensors", "track-points", "detections"]) this.pointer(layer);
   }
@@ -231,7 +244,7 @@ export class LiveMap extends BaseMap {
     this.draw();
   }
 
-  /** @param {{id:string,name:string,slot:number,points:{lat:number,lng:number,t:number,lines:string[]}[]}[]} tracks */
+  /** @param {{id:string,name:string,slot:number,points:{lat:number,lng:number,t:number}[]}[]} tracks */
   setTracks(tracks) {
     this.tracks = tracks;
     this.draw();
@@ -259,7 +272,15 @@ export class LiveMap extends BaseMap {
       "track-lines": collection(
         this.tracks.filter((t) => t.points.length > 1).map((t) => ({ type: "Feature", properties: { color: colours[t.slot] }, geometry: { type: "LineString", coordinates: t.points.map((p) => [p.lng, p.lat]) } })),
       ),
-      "track-points": collection(this.tracks.flatMap((t) => t.points.map((p) => pointFeature(p.lng, p.lat, { color: colours[t.slot], html: popupHtml(t.name, p.lines) })))),
+      // the line has every fix; the dots are thinned on a long track, which keeps the map quick
+      "track-points": collection(
+        this.tracks.flatMap((t, track) => {
+          const step = Math.ceil(t.points.length / MAX_TRACK_DOTS);
+          const dots = [];
+          for (let point = t.points.length - 1; point >= 0; point -= step) dots.push(pointFeature(t.points[point].lng, t.points[point].lat, { color: colours[t.slot], track, point }));
+          return dots;
+        }),
+      ),
       detections: collection(this.detections.map((d) => pointFeature(d.lng, d.lat, { html: popupHtml(d.title, d.lines) }))),
       sensors: collection(this.sensors.map((s) => pointFeature(s.lng, s.lat, { id: s.id, name: s.name, selected: s.id === this.selected ? 1 : 0 }))),
     };

@@ -16,7 +16,7 @@ The pages follow the structure of Smart Parks Protect: a live map, a list with a
 | Sensors | Every sensor with its animal, last reading, last position and number of readings | The same |
 | Sensor page | Everything WildlifeNL holds for one sensor: facts, latest values, the track, charts and every reading | The same |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per sensor | The same |
-| Detections | Camera trap and other detections in a period and a circle on the map | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
+| Detections | Camera trap and other detections in a period and a circle of at most 10 km | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Account | Your profile, your roles and what they allow | Any account |
 
 Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The app has a light and a dark theme and works on a phone.
@@ -44,6 +44,8 @@ Choose metrics and up to eight sensors. Each metric gets its own chart, the char
 That is all: there is no password. With "Keep me signed in on this device" the token stays in the browser until you sign out; without it the token is gone when you close the tab.
 
 If you already have a bearer token, choose "I already have a token" and paste it.
+
+The app signs in to the live server. Under "Server" on the sign-in card you can choose the test server (`https://test-api-wildlifenl.uu.nl`) instead. A token belongs to one server.
 
 Good to know:
 

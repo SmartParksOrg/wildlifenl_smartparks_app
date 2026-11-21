@@ -2,7 +2,7 @@
 
 import { ago, buildHash, toTime } from "../lib.js";
 import { explain } from "../session.js";
-import { addSensor, canListSensors, listError, loadReadings, loadSensors, loadedReadings } from "../store.js";
+import { addSensor, canListSensors, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
 
 const COLUMNS = ["sensor", "animal", "species", "last_reading", "last_position", "readings", "deployed_since", "source"];
@@ -13,7 +13,7 @@ let sensors = [];
 let run = 0;
 
 function rowOf(sensor) {
-  const loaded = loadedReadings(sensor.id);
+  const loaded = recentReadings(sensor.id);
   const times = loaded ? loaded.readings.map((r) => toTime(r.timestamp)).filter(Number.isFinite) : [];
   const last = loaded && loaded.track.length ? loaded.track[loaded.track.length - 1].t : NaN;
   return {
@@ -21,8 +21,9 @@ function rowOf(sensor) {
     animal: sensor.animal ? sensor.animal.name : "",
     species: sensor.species,
     last_reading: !loaded ? "loading…" : times.length ? ago(Math.max(...times)) : "none",
-    last_position: !loaded ? "" : Number.isFinite(last) ? ago(last) : "none",
-    readings: loaded ? loaded.readings.length : null,
+    last_position: !loaded ? "" : Number.isFinite(last) ? ago(last) : loaded.complete ? "none" : "not recently",
+    // the list reads only the newest part of a large sensor, so the total is not known
+    readings: !loaded ? null : loaded.complete ? loaded.readings.length : `over ${loaded.readings.length}`,
     deployed_since: sensor.start ? sensor.start.slice(0, 10) : "",
     source: sensor.animal ? "Deployment" : "Added by hand",
   };
@@ -40,14 +41,15 @@ function draw() {
   });
 }
 
-/** Fills the reading columns in the background, three sensors at a time. */
+/** Fills the reading columns in the background, three sensors at a time, from the newest
+ * part of each sensor's readings. */
 async function fillReadings() {
   const mine = ++run;
-  const queue = sensors.filter((sensor) => !loadedReadings(sensor.id));
+  const queue = sensors.filter((sensor) => !recentReadings(sensor.id));
   const worker = async () => {
     for (let sensor = queue.shift(); sensor && mine === run; sensor = queue.shift()) {
       try {
-        await loadReadings(sensor.id);
+        await loadRecent(sensor.id);
       } catch (error) {
         if (!explain(error)) return; // signed out
       }

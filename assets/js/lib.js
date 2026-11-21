@@ -215,3 +215,27 @@ export function trackLength(track) {
   for (let i = 1; i < track.length; i++) total += distanceMeters(track[i - 1], track[i]);
   return total;
 }
+
+/** The complete objects at the start of a JSON array that may be cut off, like
+ * `[{"a":1},{"b":2},{"c"`. Used to read the newest readings without the whole answer. */
+export function leadingObjects(text) {
+  const objects = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (char === "}") {
+      depth--;
+      if (depth === 0) objects.push(JSON.parse(text.slice(start, i + 1)));
+    }
+  }
+  return objects;
+}

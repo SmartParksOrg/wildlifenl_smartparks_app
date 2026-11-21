@@ -3,9 +3,9 @@
 
 import { SCOPES } from "../api.js";
 import { ago, buildHash, formatDistance, toPoint, toTime, trackLength, withinWindow } from "../lib.js";
-import { BASEMAPS, LiveMap, TRACK_COLORS, loadBasemap, trackColor } from "../map.js";
+import { BASEMAPS, LiveMap, MAX_RADIUS_M, TRACK_COLORS, loadBasemap, trackColor } from "../map.js";
 import { account, explain, hasScope } from "../session.js";
-import { addSensor, canListSensors, listError, loadReadings, loadSensors, loadedReadings, sensorById } from "../store.js";
+import { addSensor, canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 
 const HIDDEN_KEY = "wnl-map-hidden";
@@ -67,14 +67,14 @@ function drawMarkers() {
   $("mapCount").title = placed < sensors.length ? `${sensors.length - placed} without a position yet` : "";
   if (!fitted && shown.length) {
     fitted = true;
-    map.fit(shown.map((sensor) => sensor.place), { maxZoom: 12 });
+    map.fit(shown.map((sensor) => sensor.place), { maxZoom: 15 });
   }
 }
 
 function drawTracks() {
   const drawn = [...tracks.entries()].map(([id, slot]) => {
     const sensor = sensorById(id);
-    return { id, name: sensor ? sensor.name : id, slot, points: trackPoints(id).map((p) => ({ lat: p.lat, lng: p.lng, t: p.t, lines: pointLines(p) })) };
+    return { id, name: sensor ? sensor.name : id, slot, points: trackPoints(id) };
   });
   map.setTracks(drawn);
   const points = drawn.reduce((sum, track) => sum + track.points.length, 0);
@@ -115,7 +115,8 @@ function drawObjectPanel() {
   const sensor = sensorById(selected);
   panel.hidden = !sensor;
   if (!sensor) return;
-  const loaded = loadedReadings(sensor.id);
+  const loaded = recentReadings(sensor.id); // the newest readings are enough for these facts
+  const all = loadedReadings(sensor.id);
   const track = loaded ? loaded.track : [];
   const last = track[track.length - 1];
   const readings = loaded ? loaded.readings : [];
@@ -131,7 +132,7 @@ function drawObjectPanel() {
   facts(list, [
     ["Sensor ID", sensor.id],
     ["Last seen", loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
-    ["Position", last ? formatMoment(last.t) : loaded ? "none yet" : ""],
+    ["Position", last ? formatMoment(last.t) : loaded ? (loaded.complete ? "none yet" : "not recently") : ""],
     ["Coordinates", sensor.place ? `${sensor.place.lat.toFixed(5)}, ${sensor.place.lng.toFixed(5)}` : ""],
     ["Temperature", temperature == null ? "" : `${temperature} °C`],
     ["Animal", sensor.animal ? [sensor.animal.name, sensor.species && `(${sensor.species})`].filter(Boolean).join(" ") : ""],
@@ -146,7 +147,7 @@ function drawObjectPanel() {
     list,
     el("div", { class: "row" }, [
       el("button", { class: "btn primary sm", type: "button", text: tracked ? "Hide the track" : "Show the track", onclick: () => toggleTrack(sensor.id) }),
-      loaded && tracked ? el("span", { class: "hint", text: `${inPeriod.length} of ${plural(track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` }) : null,
+      all && tracked ? el("span", { class: "hint", text: `${inPeriod.length.toLocaleString()} of ${plural(all.track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` }) : null,
     ]),
   );
 }
@@ -179,7 +180,12 @@ async function select(id, fly = false) {
   drawObjectPanel();
   if (!id) return;
   if (hidden.delete(id)) saveHidden();
-  await ensureReadings(id);
+  try {
+    await loadRecent(id);
+  } catch (error) {
+    const text = explain(error);
+    if (text) toast(`${id}: ${text}`, true);
+  }
   if (selected !== id) return;
   redraw();
   const sensor = sensorById(id);
@@ -206,11 +212,11 @@ async function toggleTrack(id, force) {
 
 /** Sensors without a place get their readings in the background, three at a time. */
 async function locateTheRest() {
-  const queue = sensors.filter((sensor) => !sensor.place && !loadedReadings(sensor.id));
+  const queue = sensors.filter((sensor) => !sensor.place && !recentReadings(sensor.id));
   const worker = async () => {
     for (let sensor = queue.shift(); sensor; sensor = queue.shift()) {
       try {
-        await loadReadings(sensor.id);
+        await loadRecent(sensor.id);
       } catch (error) {
         if (!explain(error)) return; // signed out
       }
@@ -230,7 +236,7 @@ async function loadDetections() {
       end: new Date().toISOString(),
       latitude: center.lat,
       longitude: center.lng,
-      radius: Math.max(1000, map.viewRadius()),
+      radius: Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius())),
     });
     map.setDetections(
       detections
@@ -238,7 +244,7 @@ async function loadDetections() {
         .filter((x) => x.point)
         .map(({ point, d }) => ({ lat: point.lat, lng: point.lng, title: (d.species && (d.species.commonName || d.species.name)) || "Detection", lines: [formatMoment(point.t), d.deploymentID, d.sensorType] })),
     );
-    toast(`${plural(detections.length, "detection")} in view in the last ${DETECTION_DAYS} days`);
+    toast(`${plural(detections.length, "detection")} within ${Math.round(Math.min(MAX_RADIUS_M, Math.max(1000, map.viewRadius())) / 1000)} km of the map centre in the last ${DETECTION_DAYS} days`);
   } catch (error) {
     $("mapDetections").checked = false;
     const text = explain(error);
@@ -316,7 +322,7 @@ function wire() {
 /** Shows the page; `?sensor=ID` selects a sensor and `&track=1` draws its track. */
 export async function show({ query }) {
   if (!map) {
-    map = new LiveMap($("liveMap"), { onSensor: (id) => select(id), onNothing: () => select("") });
+    map = new LiveMap($("liveMap"), { onSensor: (id) => select(id), onNothing: () => select(""), describePoint: (track, point) => [track.name, pointLines(point)] });
     wire();
   }
   if (!map.map) return;

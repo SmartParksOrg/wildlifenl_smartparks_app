@@ -1,6 +1,6 @@
 // The WildlifeNL API client. It throws ApiError with a message a person can read.
 
-import { problemText } from "./lib.js";
+import { leadingObjects, problemText } from "./lib.js";
 
 export const DEFAULT_API_URL = "https://live-api-wildlifenl.uu.nl";
 /** The name WildlifeNL shows in the login email. A token belongs to an email address and an
@@ -95,6 +95,51 @@ export class WildlifeNlClient {
 
   readings(sensorId) {
     return this.list(`/borne-sensor-readings/sensor/${encodeURIComponent(sensorId)}`);
+  }
+
+  /** The newest readings of a sensor without downloading all of them. The API has no limit
+   * or time filter and a sensor can hold megabytes, but it answers newest first, so this
+   * reads the first `maxBytes` of the answer and hangs up. `complete` tells whether that
+   * was the whole answer. */
+  async recentReadings(sensorId, maxBytes = 65536) {
+    const control = new AbortController();
+    const timer = setTimeout(() => control.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch(`${this.baseUrl}/borne-sensor-readings/sensor/${encodeURIComponent(sensorId)}`, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${this.token}` },
+        signal: control.signal,
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        let body = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          /* not a problem document */
+        }
+        throw new ApiError(problemText(response.status, body), response.status);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      let complete = false;
+      while (text.length < maxBytes) {
+        const { done, value } = await reader.read();
+        if (done) {
+          complete = true;
+          break;
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      return { readings: leadingObjects(text), complete };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(`Could not read from ${new URL(this.baseUrl).host}. Check your connection.`);
+    } finally {
+      clearTimeout(timer);
+      control.abort();
+    }
   }
 
   detections({ start, end, latitude, longitude, radius }) {

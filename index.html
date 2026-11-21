@@ -90,7 +90,11 @@
             <summary>Server</summary>
             <label class="field">
               <span>WildlifeNL API address</span>
-              <input id="authBaseUrl" type="url" inputmode="url" spellcheck="false" />
+              <input id="authBaseUrl" type="url" inputmode="url" spellcheck="false" list="authServers" />
+              <datalist id="authServers">
+                <option value="https://live-api-wildlifenl.uu.nl" label="Live"></option>
+                <option value="https://test-api-wildlifenl.uu.nl" label="Test"></option>
+              </datalist>
             </label>
           </details>
         </div>
@@ -170,7 +174,7 @@
               </label>
               <div id="layerDetections">
                 <div class="panel-title"><span>Detections</span></div>
-                <label class="check"><input type="checkbox" id="mapDetections" /><span>Detections of the last 7 days in view</span></label>
+                <label class="check"><input type="checkbox" id="mapDetections" /><span>Detections of the last 7 days, within 10 km of the map centre</span></label>
               </div>
             </div>
           </div>
@@ -298,7 +302,7 @@
           <div class="page-header">
             <div>
               <h1>Detections</h1>
-              <p>Camera trap and other sensor detections within a period and a circle on the map</p>
+              <p>Camera trap and other sensor detections within a period and a circle of at most 10 km</p>
             </div>
           </div>
           <div class="page-body">
@@ -307,7 +311,7 @@
               <label class="field"><span>To</span><input id="detectionsTo" type="datetime-local" required /></label>
               <label class="field"><span>Latitude</span><input id="detectionsLat" type="number" step="any" min="-90" max="90" required value="52.1" /></label>
               <label class="field"><span>Longitude</span><input id="detectionsLng" type="number" step="any" min="-180" max="180" required value="5.3" /></label>
-              <label class="field"><span>Radius (km)</span><input id="detectionsRadius" type="number" step="any" min="0.1" required value="200" /></label>
+              <label class="field"><span>Radius (km, at most 10)</span><input id="detectionsRadius" type="number" step="any" min="0.1" max="10" required value="10" /></label>
               <label class="field"><span>Deployment ID contains</span><input id="detectionsDeployment" type="text" spellcheck="false" placeholder="Optional" /></label>
               <div class="form-actions">
                 <button class="btn outline" type="button" id="detectionsUseMap">Use map centre</button>

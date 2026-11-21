@@ -48,9 +48,10 @@ async function load() {
       detections
         .map((d) => ({ point: toPoint(d, "start"), d }))
         .filter((x) => x.point)
-        .map(({ point, d }) => ({ ...point, title: (d.species && (d.species.commonName || d.species.name)) || "Detection", lines: [formatMoment(point.t), d.deploymentID, d.sensorType] })),
+        .map(({ point, d }) => ({ ...point, d })),
+      { describe: (p) => [(p.d.species && (p.d.species.commonName || p.d.species.name)) || "Detection", [formatMoment(p.t), p.d.deploymentID, p.d.sensorType]] },
     );
-    if (!detections.length) note(target, all.length ? "No detection in the area matches that deployment ID." : "No detections in this period and area. Try a longer period or a larger radius.", "warn");
+    if (!detections.length) note(target, all.length ? "No detection in the area matches that deployment ID." : "No detections in this period and area. Try a longer period or move the centre; WildlifeNL searches at most 10 km around it.", "warn");
   } catch (error) {
     note(target, explain(error), "error");
   }

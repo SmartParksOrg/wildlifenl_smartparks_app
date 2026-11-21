@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -129,4 +129,13 @@ test("formatDistance picks metres or kilometres", () => {
   assert.equal(formatDistance(1234), "1.2 km");
   assert.equal(formatDistance(45678), "46 km");
   assert.equal(formatDistance(NaN), "");
+});
+
+test("leadingObjects reads the whole objects of a cut-off array", () => {
+  const full = JSON.stringify([{ a: 1, nested: { b: "x}y" } }, { c: 'quote " and brace {' }, { d: [1, { e: 2 }] }]);
+  assert.equal(leadingObjects(full).length, 3);
+  assert.deepEqual(leadingObjects(full.slice(0, full.indexOf('{"d"') + 8)), [{ a: 1, nested: { b: "x}y" } }, { c: 'quote " and brace {' }]);
+  assert.deepEqual(leadingObjects('[{"a":1},{"b":"cut'), [{ a: 1 }]);
+  assert.deepEqual(leadingObjects("null"), []);
+  assert.deepEqual(leadingObjects(""), []);
 });

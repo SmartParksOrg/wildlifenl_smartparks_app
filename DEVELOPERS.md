@@ -43,11 +43,18 @@ The address after `#` chooses the page: `#/map`, `#/sensors`, `#/sensors/{id}`, 
 
 `store.js` is the one place that knows which sensors exist. A sensor comes from `GET /borne-sensor-deployment/active/` (herd managers only) or from the IDs the user added, kept in `localStorage` under `wnl-sensors`. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
 
-The API has no "latest reading" call and no time filter: one request returns every reading of a sensor. The pages therefore fetch per sensor, three at a time in the background, and filter by period in the browser. A deployment carries the animal's current location, which places the marker before the readings are in.
+The API has no "latest reading" call, no limit and no time filter: one request returns every reading of a sensor, uncompressed. On the test server a simulated sensor holds about 26,000 readings, 4.5 MB per request. Two things keep the app quick:
+
+- **Recent readings.** The API answers newest first (it sorts that way in its source). `WildlifeNlClient.recentReadings` reads the first 64 KB of the answer, a few hundred readings, and hangs up; `leadingObjects` in `lib.js` parses the whole objects of that cut-off text. The sensors list and the sensor panel on the map use `loadRecent`, which is why the list shows "over 423" readings for a large sensor: the total is not known until everything is loaded.
+- **Everything only when needed.** A track, a sensor page and the data explorer need all readings and call `loadReadings`. The period is then filtered in the browser.
+
+A deployment carries the animal's current location, which places the marker without any reading.
+
+Measured against the test server with 13 sensors: the live map shows its markers in 0.4 s, the sensors list is complete in 1.2 s (about 0.6 MB), and the first track or sensor page of a large sensor takes about 1.5 s (4.5 MB).
 
 ## WildlifeNL API
 
-The app follows the OpenAPI document the API serves at its root (`/openapi.json`), version `20260826`. The source is open: [UtrechtUniversity/wildlifenl](https://github.com/UtrechtUniversity/wildlifenl). The API sends `Access-Control-Allow-Origin: *`, so a static page can call it.
+The app follows the OpenAPI document the API serves at its root (`/openapi.json`), version `20260826` on the live server (`live-api-wildlifenl.uu.nl`) and `20261116` on the test server (`test-api-wildlifenl.uu.nl`); the calls this app uses are the same on both. The source is open: [UtrechtUniversity/wildlifenl](https://github.com/UtrechtUniversity/wildlifenl). The API sends `Access-Control-Allow-Origin: *`, so a static page can call it.
 
 | Call | Used for | Roles |
 | --- | --- | --- |
@@ -56,7 +63,7 @@ The app follows the OpenAPI document the API serves at its root (`/openapi.json`
 | `GET /profile/me/` | Check the token, read the name and the roles | any account |
 | `GET /borne-sensor-deployment/active/` | Suggestions for the sensor ID | `herd-manager` |
 | `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `land-user`, `nature-area-manager`, `wildlife-manager`, `herd-manager` |
-| `GET /detections/` | Detections by `start`, `end`, `latitude`, `longitude`, `radius` (metres) | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /detections/` | Detections by `start`, `end`, `latitude`, `longitude`, `radius` (metres, at most 10000) | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 
 The roles are also in `SCOPES` in `api.js`; the Account page draws its access table from it. When the API changes, update `SCOPES`, this table and the README together.
 
@@ -90,7 +97,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 
 `map.js` has two classes on a shared base. `MapView` draws the points of one page with an optional track. `LiveMap` draws a labelled marker per sensor, a coloured line and points per track, and the detections; it tells the page about clicks through callbacks. Both take their data as plain lists and rebuild their GeoJSON sources in `sources()`, so after a style change (`style.load`) the same data is drawn again.
 
-The base maps are OpenFreeMap's `positron`, `liberty`, `bright` and `fiord`, the same as in Protect and without an API key. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for the night map.
+The base maps are OpenFreeMap's `positron`, `liberty`, `bright` and `fiord`, the same as in Protect and without an API key. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves. A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for the night map.
 
 MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
 

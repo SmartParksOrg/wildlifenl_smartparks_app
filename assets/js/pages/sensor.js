@@ -67,7 +67,7 @@ function drawFacts(sensor, readings, track) {
     ["Position time", last ? `${formatMoment(last.t)} (${ago(last.t)})` : ""],
     ["Temperature", value(temperature, temperature && `${temperature.temperature} °C`)],
     ["Altitude", value(altitude, altitude && `${Math.round(altitude.altitude)} m`)],
-    ["Acceleration", value(accelero, accelero && `x ${accelero.accelero.x}, y ${accelero.accelero.y}, z ${accelero.accelero.z}`)],
+    ["Acceleration", value(accelero, accelero && ["x", "y", "z"].map((axis) => `${axis} ${Number(accelero.accelero[axis]).toFixed(2)}`).join(", "))],
   ]);
 
   const animal = sensor && sensor.animal;
@@ -90,7 +90,7 @@ function drawPeriod(readings, track) {
 
   $("sensorTrackText").textContent = points.length ? `${plural(points.length, "position")}, ${formatDistance(trackLength(points))}` : "No positions in this period";
   map.setTrack(true);
-  map.setPoints(points.map((p) => ({ ...p, title: formatMoment(p.t), lines: [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, typeof p.raw.temperature === "number" ? `${p.raw.temperature} °C` : ""] })));
+  map.setPoints(points, { describe: (p) => [formatMoment(p.t), [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, typeof p.raw.temperature === "number" ? `${p.raw.temperature} °C` : ""]] });
 
   for (const chart of charts) chart.dispose();
   charts = [];

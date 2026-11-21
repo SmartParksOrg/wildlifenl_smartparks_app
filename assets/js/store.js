@@ -16,6 +16,8 @@ const state = {
   /** @type {Promise<Sensor[]>|null} */ loading: null,
   /** @type {Map<string, Promise<object[]>>} */ readings: new Map(),
   /** @type {Map<string, {readings:object[], track:object[]}>} */ loaded: new Map(),
+  /** @type {Map<string, Promise<object>>} */ recent: new Map(),
+  /** @type {Map<string, {readings:object[], track:object[], complete:boolean}>} */ recentLoaded: new Map(),
   listError: "",
 };
 
@@ -72,7 +74,7 @@ async function fetchSensors() {
 }
 
 function applyLoaded(sensor) {
-  const loaded = state.loaded.get(sensor.id);
+  const loaded = state.loaded.get(sensor.id) || state.recentLoaded.get(sensor.id);
   if (!loaded || !loaded.track.length) return;
   const last = loaded.track[loaded.track.length - 1];
   sensor.place = { lat: last.lat, lng: last.lng, t: last.t };
@@ -121,6 +123,8 @@ export function loadReadings(id, force = false) {
   if (force) {
     state.readings.delete(id);
     state.loaded.delete(id);
+    state.recent.delete(id);
+    state.recentLoaded.delete(id);
   }
   if (!state.readings.has(id)) {
     const promise = account.api
@@ -141,6 +145,40 @@ export function loadReadings(id, force = false) {
   return state.readings.get(id);
 }
 
+/** The newest readings of a sensor `{readings, track, complete}`: the first part of the
+ * answer only, which is enough for "last seen" and costs kilobytes where all readings can
+ * cost megabytes. When that part turns out to be everything, it counts as fully loaded. */
+export function loadRecent(id) {
+  if (state.loaded.has(id)) return Promise.resolve({ ...state.loaded.get(id), complete: true });
+  if (!state.recent.has(id)) {
+    const promise = account.api
+      .recentReadings(id)
+      .then(({ readings, complete }) => {
+        const data = { readings, track: trackOf(readings), complete };
+        state.recentLoaded.set(id, data);
+        if (complete && !state.loaded.has(id)) {
+          state.loaded.set(id, data);
+          state.readings.set(id, Promise.resolve(data));
+        }
+        const sensor = sensorById(id);
+        if (sensor) applyLoaded(sensor);
+        return data;
+      })
+      .catch((error) => {
+        state.recent.delete(id);
+        throw error;
+      });
+    state.recent.set(id, promise);
+  }
+  return state.recent.get(id);
+}
+
+/** The newest readings in memory: all of them when loaded, else the recent part, else null. */
+export function recentReadings(id) {
+  const loaded = state.loaded.get(id);
+  return loaded ? { ...loaded, complete: true } : state.recentLoaded.get(id) || null;
+}
+
 /** The readings of a sensor when they are already in memory. */
 export function loadedReadings(id) {
   return state.loaded.get(id) || null;
@@ -152,5 +190,7 @@ export function resetStore() {
   state.loading = null;
   state.readings.clear();
   state.loaded.clear();
+  state.recent.clear();
+  state.recentLoaded.clear();
   state.listError = "";
 }

@@ -15,12 +15,14 @@ The app now has the structure of Smart Parks Protect: a live map, a list with a 
 - Sensor page: facts, latest values, the animal, the track, charts of temperature, altitude and speed, and every reading.
 - Data explorer: one chart per metric with a line per sensor, a range and a bucket, the same numbers as a table and as CSV. The view is in the address.
 - Sensors can be added by ID and are remembered in the browser, for accounts that may not list the deployments.
+- The sign-in card offers the live and the test server.
 
 ### Changed
 
 - The navigation is a column with the logo, like Protect, and replaces the top bar.
 - The sensor readings page is replaced by the Sensors list and the page per sensor.
-- Readings are fetched once per sensor and shared by all pages.
+- Readings are fetched once per sensor and shared by all pages. The sensors list and the map read only the newest part of a sensor's readings, so a sensor with tens of thousands of readings does not slow them down.
+- The detection radius is at most 10 km, the limit of the API.
 
 ## 2.0.0 - 2026-11-21
 
