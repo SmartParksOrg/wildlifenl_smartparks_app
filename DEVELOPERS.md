@@ -23,6 +23,7 @@ assets/js/api.js         WildlifeNlClient
 assets/js/session.js     The signed-in account: token storage, roles, sign out
 assets/js/store.js       The sensors and their readings, fetched once and kept in memory
 assets/js/detections.js  Detections and reports: searching an area, remembered places
+assets/js/people.js      People on the move: tracking readings, contacts, sent messages, alarms
 assets/js/records.js     Every other kind of record: where it is read and what it links to
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
@@ -66,7 +67,13 @@ A sensor deployment in WildlifeNL ties a sensor to an animal, the way Protect ti
 
 - The Animals list and the Sensors list are one module (`pages/sensors.js`) with two descriptions in `LISTS`.
 - The animal page and the sensor page are one module (`pages/sensor.js`): the same facts, track, charts and readings, led by the animal or by the sensor, with a button to the other side.
-- On the live map a sensor on an animal is selected as an animal; only sensors without one are sensors there (`tabOf` in `pages/map.js`).
+- On the live map the Animals tab holds the animals and the Sensors tab every sensor. A sensor on an animal is `off` there: it is drawn as a sensor only once it is ticked or picked, because its animal is on the map already. The map draws both in one clustered layer and tells them apart by the first letter of the item ID (`a:` or `s:`).
+
+## People
+
+`people.js` reads what WildlifeNL knows about people on the move: tracking readings (where the recreation app recorded someone), contacts (a phone near an animal's sensor), conveyances (the messages and alarms shown to someone) and alarms. Every account may read its own (`.../me/`); a researcher gets those of every experiment (`.../experiment/{id}`), and an administrator or researcher all alarms. A part that is refused leaves the rest standing. Names come from the records that name a person, then from `GET /user/{id}` for the ones still unknown.
+
+On the live map people are a layer with a track per person, in the same track colours as the animals (a track key is a sensor ID, or `p:` and a user ID). Contacts and alarms join the reports in the Events tab; an event ID starts with `r:`, `c:` or `l:`. An alarm is placed at what caused it, else in the middle of its zone (`alarmPlace`).
 
 ## Other records
 
@@ -129,7 +136,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-basemap` | `localStorage` | The chosen base map |
 | `wnl-sidebar` | `localStorage` | Whether the navigation column is folded |
 | `wnl-terrain` | `localStorage` | Whether 3D terrain is on |
-| `wnl-map-layers` | `localStorage` | The layers panel: the open tab and per tab the hidden rows, folded groups, arrangement and sorting |
+| `wnl-map-layers` | `localStorage` | The layers panel: the open tab and per tab the hidden rows, the rows switched on that are off by default, folded groups, arrangement and sorting |
 | `wnl-report-places:{server}` | `localStorage` | The places where reports were found |
 | `wnl-server` | `localStorage` | The platform of the last sign-in, chosen again next time |
 | `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |

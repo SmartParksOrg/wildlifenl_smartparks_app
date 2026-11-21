@@ -55,6 +55,8 @@
         <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
         <symbol id="i-sort-name" viewBox="0 0 24 24"><path d="m3 16 4 4 4-4M7 20V4M20 8h-5M15 10V6.500a2.500 2.500 0 0 1 5 0V10M15 14h5l-5 6h5" /></symbol>
         <symbol id="i-sort-time" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16" /></symbol>
+        <symbol id="i-contact" viewBox="0 0 24 24"><circle cx="9" cy="12" r="6" /><circle cx="15" cy="12" r="6" /></symbol>
+        <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></symbol>
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5" /></symbol>
         <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></symbol>
@@ -137,9 +139,12 @@
             <a class="nav-item" href="#/map" data-view="map"><svg class="icon"><use href="#i-map" /></svg><span>Live map</span></a>
             <a class="nav-item" href="#/animals" data-view="animals"><svg class="icon"><use href="#i-animal" /></svg><span>Animals</span></a>
             <a class="nav-item" href="#/sensors" data-view="sensors"><svg class="icon"><use href="#i-sensor" /></svg><span>Sensors</span></a>
+            <a class="nav-item" href="#/data/people" data-view="people" data-type="people"><svg class="icon"><use href="#i-users" /></svg><span>People</span></a>
             <a class="nav-item" href="#/detections" data-view="detections"><svg class="icon"><use href="#i-camera" /></svg><span>Detections</span></a>
             <a class="nav-item" href="#/data/reports" data-view="reports" data-type="reports"><svg class="icon"><use href="#i-flag" /></svg><span>Reports</span></a>
+            <a class="nav-item" href="#/data/contacts" data-view="contacts" data-type="contacts"><svg class="icon"><use href="#i-contact" /></svg><span>Contacts</span></a>
             <a class="nav-item" href="#/data/alarms" data-view="alarms" data-type="alarms"><svg class="icon"><use href="#i-bell" /></svg><span>Alarms</span></a>
+            <a class="nav-item" href="#/data/conveyances" data-view="conveyances" data-type="conveyances"><svg class="icon"><use href="#i-message" /></svg><span>Messages</span></a>
           </div>
           <div class="nav-section">
             <div class="nav-label">Analyze</div>
@@ -158,7 +163,6 @@
           <div class="nav-section">
             <div class="nav-label">Reference</div>
             <a class="nav-item" href="#/data/species" data-view="species" data-type="species"><svg class="icon"><use href="#i-book" /></svg><span>Species</span></a>
-            <a class="nav-item" href="#/data/people" data-view="people" data-type="people"><svg class="icon"><use href="#i-users" /></svg><span>People</span></a>
           </div>
         </nav>
         <div class="sidebar-foot">
@@ -220,14 +224,16 @@
               <div class="tabs" id="layerTabs" role="tablist">
                 <button class="tab" type="button" role="tab" data-tab="animals">Animals</button>
                 <button class="tab" type="button" role="tab" data-tab="sensors">Sensors</button>
+                <button class="tab" type="button" role="tab" data-tab="people">People</button>
                 <button class="tab" type="button" role="tab" data-tab="detectors">Detectors</button>
-                <button class="tab" type="button" role="tab" data-tab="reports">Reports</button>
+                <button class="tab" type="button" role="tab" data-tab="events">Events</button>
                 <button class="tab" type="button" role="tab" data-tab="areas">Areas</button>
               </div>
               <div class="layer-tab" id="layerTab-animals" role="tabpanel"></div>
               <div class="layer-tab" id="layerTab-sensors" role="tabpanel" hidden></div>
               <div class="layer-tab" id="layerTab-detectors" role="tabpanel" hidden></div>
-              <div class="layer-tab" id="layerTab-reports" role="tabpanel" hidden></div>
+              <div class="layer-tab" id="layerTab-people" role="tabpanel" hidden></div>
+              <div class="layer-tab" id="layerTab-events" role="tabpanel" hidden></div>
               <div class="layer-tab" id="layerTab-areas" role="tabpanel" hidden></div>
               <div class="layer-find" id="layerFind" hidden>
                 <span class="hint" id="layerFindText"></span>

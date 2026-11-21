@@ -6,6 +6,7 @@
 import { SCOPES } from "./api.js";
 import { detections, loadDetections } from "./detections.js";
 import { buildHash } from "./lib.js";
+import { loadPeople, people, personName } from "./people.js";
 import { account, hasScope } from "./session.js";
 
 /** The address of a list (`#/data/species`) or of one record (`#/data/species/{id}`). */
@@ -31,13 +32,32 @@ async function reports() {
   return [...all.values()];
 }
 
+/** A list that the people module has read: the account's own, or every experiment's. */
+const fromPeople = (pick) => async () => {
+  await loadPeople();
+  return pick();
+};
+
+/** The people the app knows of: every account for an administrator, else whoever was
+ * recorded somewhere or named in another record. */
+async function knownPeople() {
+  await loadPeople();
+  const all = new Map();
+  if (hasScope(SCOPES.profiles)) for (const profile of await account.api.list("/profiles/")) all.set(String(profile.ID), profile);
+  for (const [key, record] of seen) if (key.startsWith("people|") && !all.has(String(record.ID))) all.set(String(record.ID), record);
+  for (const id of [...people.tracks.keys(), ...people.names.keys()]) if (id && !all.has(String(id))) all.set(String(id), { ID: id, name: personName(id) });
+  return [...all.values()].map((person) => ({ ...person, positions: (people.tracks.get(person.ID) || []).length || "" }));
+}
+
+const ofPerson = (list) => (record) => list().filter((item) => item.user && String(item.user.ID) === String(record.ID));
+
 const research = (path) => ({ needs: SCOPES.research, load: (record) => account.api.list(`/${path}/experiment/${record.ID}`) });
 
 /**
  * The kinds of records, by the word in the address.
  * - `table` is the name in the API, `nav` the entry of the navigation it belongs under.
- * - `needs` are the roles for the list (none: every account); `mine` is the list every
- *   account gets instead when it lacks them.
+ * - `needs` are the roles for the list (none: every account); `ownOnly` says a `list` gives
+ *   an account without them only its own records.
  * - `get` reads one record in full, `getNeeds` are its roles.
  * - `columns` are the fields of the list, `title` the name of one record.
  * - `related` are lists that hang under one record, each with its type and loader.
@@ -103,10 +123,10 @@ export const TYPES = {
     plural: "Alarms",
     nav: "alarms",
     description: "An animal, a detection or a report came inside a zone",
-    path: "/alarms/",
+    list: fromPeople(() => people.alarms),
     needs: SCOPES.alarms,
-    mine: "/alarms/me/",
-    columns: ["timestamp", "zone", "animal", "detection", "interaction"],
+    ownOnly: true,
+    columns: ["timestamp", "zone", "animal", "detection", "interaction", "conveyances"],
     title: (record) => `Alarm in ${(record.zone && record.zone.name) || "a zone"}`,
   },
   experiments: {
@@ -144,20 +164,60 @@ export const TYPES = {
   answers: { table: "Answer", label: "Answer option", plural: "Answer options", nav: "experiments", description: "One answer a person can pick", get: (id) => `/answer/${id}`, columns: ["index", "text"], title: (record) => record.text || "Answer" },
   messages: { table: "Message", label: "Message", plural: "Messages", nav: "experiments", description: "A text of an experiment that is shown to people", get: (id) => `/message/${id}`, columns: ["name", "severity", "species", "text"] },
   responses: { table: "Response", label: "Response", plural: "Responses", nav: "experiments", description: "What you answered to questions", path: "/responses/me/", columns: ["timestamp", "question", "answer", "text"], title: (record) => record.text || (record.answer && record.answer.text) || "Response" },
-  conveyances: { table: "Conveyance", label: "Sent message", plural: "Sent messages", nav: "alarms", description: "The messages and alarms that were shown to you", path: "/conveyances/me/", columns: ["timestamp", "message", "alarm", "animal"], title: (record) => (record.message && record.message.name) || "Sent message" },
-  contacts: { table: "Contact", label: "Contact", plural: "Contacts", nav: "alarms", description: "The times your phone was near an animal's sensor", path: "/contacts/me/", columns: ["start", "end", "borneSensorDeployment", "startLocation"], title: () => "Contact" },
-  tracking: { table: "TrackingReading", label: "Tracking reading", plural: "Tracking readings", nav: "people", description: "Where the recreation app recorded you", path: "/tracking-readings/me/", columns: ["timestamp", "location"], title: () => "Tracking reading" },
+  conveyances: {
+    table: "Conveyance",
+    label: "Sent message",
+    plural: "Messages",
+    nav: "conveyances",
+    description: "The messages and alarms that were shown to people, with who got them and why",
+    list: fromPeople(() => people.conveyances),
+    needs: SCOPES.research,
+    ownOnly: true,
+    columns: ["timestamp", "user", "message", "alarm", "animal", "response"],
+    title: (record) => (record.message && (record.message.name || record.message.text)) || "Sent message",
+  },
+  contacts: {
+    table: "Contact",
+    label: "Contact",
+    plural: "Contacts",
+    nav: "contacts",
+    description: "A person's phone was near an animal's sensor for some time",
+    list: fromPeople(() => people.contacts),
+    needs: SCOPES.research,
+    ownOnly: true,
+    columns: ["start", "end", "user", "borneSensorDeployment", "startLocation", "conveyances"],
+    title: (record) => [record.user && record.user.name, record.borneSensorDeployment && record.borneSensorDeployment.animal && record.borneSensorDeployment.animal.name].filter(Boolean).join(" and ") || "Contact",
+  },
+  tracking: {
+    table: "TrackingReading",
+    label: "Tracking reading",
+    plural: "Tracking readings",
+    nav: "people",
+    description: "Where the recreation app recorded people",
+    list: fromPeople(() => [...people.tracks.values()].flat().map((point) => point.raw)),
+    needs: SCOPES.research,
+    ownOnly: true,
+    columns: ["timestamp", "userID", "location"],
+    title: () => "Tracking reading",
+  },
   people: {
     table: "Profile",
     label: "Person",
     plural: "People",
     nav: "people",
-    description: "The accounts, with their roles",
-    path: "/profiles/",
+    description: "The people the app knows of: recorded by the recreation app, or named in a report, a contact or a message",
+    list: knownPeople,
     needs: SCOPES.profiles,
+    ownOnly: true,
     get: (id) => (hasScope(SCOPES.profiles) ? `/profile/${id}` : `/user/${id}`),
-    columns: ["name", "email", "roles"],
-    hint: "Only administrators may list the accounts. A name in another record still opens that person.",
+    columns: ["name", "positions", "email", "roles"],
+    related: [
+      { label: "Where the recreation app recorded this person", load: (record) => (people.tracks.get(record.ID) || []).map((point) => point.raw).reverse(), columns: ["timestamp", "location"], onMap: true },
+      { label: "Contacts with animals", type: "contacts", load: ofPerson(() => people.contacts), columns: ["start", "end", "borneSensorDeployment", "startLocation"] },
+      { label: "Messages received", type: "conveyances", load: ofPerson(() => people.conveyances), columns: ["timestamp", "message", "alarm", "animal"] },
+      { label: "Reports made", type: "reports", load: ofPerson(() => [...detections.reports.values()]), columns: ["moment", "type", "species", "notes"] },
+    ],
+    hint: "Only administrators see every account. Others see the people in the data they may read.",
   },
   roles: { table: "Role", label: "Role", plural: "Roles", nav: "people", description: "What an account may do", path: "/roles/", columns: ["name"] },
 };
@@ -216,6 +276,7 @@ function keep(type, record) {
 export function linkOf(field, value) {
   if (value == null || value === "") return null;
   if (field === "sensorID" && typeof value === "string") return { href: buildHash("sensors", value), text: value };
+  if (field === "userID" && typeof value === "string") return { href: recordHash("people", value), text: personName(value) };
   if (field === "deploymentID" && typeof value === "string") return { href: buildHash("detections", "", { detector: value }), text: value };
   if (field === "detection" && idOf(value)) return { href: buildHash("detections", "", { detector: value.deploymentID }), text: `Detection at ${value.deploymentID || "a detector"}` };
   if (field === "borneSensorDeployment" && value.sensorID) return { href: buildHash("sensors", value.sensorID), text: value.sensorID };
@@ -233,7 +294,7 @@ export function titleOf(type, record) {
 /** Whether the account may read the list of a kind, in full or only its own. */
 export function canList(type) {
   const def = TYPES[type];
-  return Boolean(def.list || def.mine || (def.path && hasScope(def.needs || [])));
+  return Boolean(def.list || (def.path && hasScope(def.needs || [])));
 }
 
 /** The records of a kind and whether the account sees only its own. */
@@ -243,10 +304,9 @@ export async function listRecords(type) {
   let records;
   if (def.list) records = await def.list();
   else if (def.path && all) records = await account.api.list(def.path);
-  else if (def.mine) records = await account.api.list(def.mine);
   else records = [...seen.entries()].filter(([key]) => key.startsWith(`${type}|`)).map(([, record]) => record);
   for (const record of records) keep(type, record);
-  return { records, own: Boolean(def.mine && !all) };
+  return { records, own: Boolean(def.ownOnly && !all) };
 }
 
 /** One record: read in full when the account may, else what was seen of it elsewhere. */
@@ -267,6 +327,7 @@ export async function getRecord(type, id) {
 }
 
 export async function relatedRecords(relation, record) {
+  await loadPeople();
   const rows = await relation.load(record);
   if (relation.type) for (const row of rows) keep(relation.type, row);
   return rows;

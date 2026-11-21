@@ -14,6 +14,7 @@ import * as sensorPage from "./pages/sensor.js";
 import * as sensorsPage from "./pages/sensors.js";
 import { account, explain, loadSession, openSession, refreshProfile, saveSession, signOut } from "./session.js";
 import { resetDetections } from "./detections.js";
+import { resetPeople } from "./people.js";
 import { TYPES, canList, recordHash, resetRecords } from "./records.js";
 import { loadSensors, resetStore } from "./store.js";
 import { $, busy, el, icon, note, toast } from "./ui.js";
@@ -375,6 +376,7 @@ async function start() {
     if ($("searchDialog").open) $("searchDialog").close();
     resetStore();
     resetDetections();
+    resetPeople();
     resetRecords();
     for (const page of Object.values(PAGES)) page.module.reset();
     showAuth(message);

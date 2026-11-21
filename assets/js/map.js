@@ -51,7 +51,7 @@ const MAX_TRACK_DOTS = 2000;
 /** Protect's value: markers group when they would overlap, not before. */
 const CLUSTER_RADIUS_PX = 28;
 /** The layers a click can hit, the one on top first. */
-const CLICKABLE = ["sensors", "sensor-clusters", "detectors", "reports", "track-points", "areas"];
+const CLICKABLE = ["sensors", "sensor-clusters", "people", "detectors", "reports", "track-points", "areas"];
 
 /** One colour per track, in the order Protect uses, and a lighter set of the same hues for a
  * dark ground. A track is known by its slot, so it keeps its hue when the ground changes. */
@@ -122,6 +122,8 @@ function collection(features) {
 const DETECTOR_ICON = "camera_trap";
 /** A report is drawn as a diamond with the icon of its species, in the sand of a warning. */
 const REPORT_PREFIX = "report-";
+/** The layers that draw a marker image per item. */
+const MARKER_KINDS = ["sensors", "people", "detectors", "reports"];
 const MARKER_COLOURS = { normal: GREEN, selected: "#2563EB" };
 const REPORT_COLOUR = "#B8923F";
 const SELECTED_HALO = "rgba(37, 99, 235, 0.28)";
@@ -406,8 +408,10 @@ function polygonFeature(points, properties) {
 /**
  * The live map. It draws what the page gives it and tells the page what was clicked:
  * - sensors: a marker with the icon of the species, grouped into a disc with a count where
- *   they would overlap
- * - detectors and reports: diamonds, Protect's shape for events
+ *   they would overlap; the page puts the animals and the bare sensors in this layer
+ * - people: a disc with a person
+ * - detectors and reports: diamonds, Protect's shape for events; the page also puts
+ *   contacts and alarms among the reports
  * - areas: the outlines of living labs and zones
  * - tracks, the visits of an area as discs, and the measuring line
  * Every item carries `selected`; the page hears `onPick(kind, id)` and `onNothing()`.
@@ -420,7 +424,7 @@ export class LiveMap extends BaseMap {
     if (this.map && this.terrain) this.map.setPitch(TERRAIN_PITCH);
     this.measuring = false;
     this.measure = [];
-    this.items = { sensors: [], detectors: [], reports: [], areas: [], visits: [] };
+    this.items = { sensors: [], people: [], detectors: [], reports: [], areas: [], visits: [] };
     this.tracks = [];
     this.making = new Set();
     if (!this.map) return;
@@ -450,7 +454,7 @@ export class LiveMap extends BaseMap {
   }
 
   markerOf(kind, item) {
-    const name = kind === "detectors" ? DETECTOR_ICON : kind === "reports" ? `${REPORT_PREFIX}${item.icon}` : item.icon;
+    const name = kind === "detectors" ? DETECTOR_ICON : kind === "people" ? "person" : kind === "reports" ? `${REPORT_PREFIX}${item.icon}` : item.icon;
     return markerId(name, item.selected ? "selected" : "normal");
   }
 
@@ -458,7 +462,7 @@ export class LiveMap extends BaseMap {
   draw() {
     if (!this.map || !this.ready) return;
     const needed = new Set();
-    for (const kind of ["sensors", "detectors", "reports"]) for (const item of this.items[kind]) needed.add(this.markerOf(kind, item));
+    for (const kind of MARKER_KINDS) for (const item of this.items[kind]) needed.add(this.markerOf(kind, item));
     for (const id of needed) {
       if (this.map.hasImage(id) || this.making.has(id)) continue;
       this.making.add(id);
@@ -473,7 +477,7 @@ export class LiveMap extends BaseMap {
   }
 
   /**
-   * What one layer shows. `kind` is `sensors`, `detectors` or `reports` (items
+   * What one layer shows. `kind` is `sensors`, `people`, `detectors` or `reports` (items
    * `{id, name, icon, lat, lng, selected}`), `areas` (`{id, name, points, selected}`) or
    * `visits` (`{lat, lng, count}`).
    */
@@ -535,6 +539,7 @@ export class LiveMap extends BaseMap {
       "measure-points": collection(this.measure.map((p) => pointFeature(p.lng, p.lat, {}))),
       reports: markers("reports"),
       detectors: markers("detectors"),
+      people: markers("people"),
       sensors: markers("sensors"),
     };
   }
@@ -572,6 +577,7 @@ export class LiveMap extends BaseMap {
       { id: "measure-points", type: "circle", source: "measure-points", paint: { "circle-radius": 4, "circle-color": "#ffffff", "circle-stroke-color": night ? "#ffffff" : "#1f2a24", "circle-stroke-width": 2 } },
       marker("reports"),
       marker("detectors"),
+      marker("people"),
       {
         id: "sensor-clusters",
         type: "circle",

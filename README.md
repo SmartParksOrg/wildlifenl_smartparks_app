@@ -12,17 +12,20 @@ The pages follow the structure of Smart Parks Protect. An animal is what people 
 
 | Page | What you see |
 | --- | --- |
-| Live map | The animals at their last position, with tracks, and as further layers the sensors without an animal, the detectors, reports from people, living labs and zones |
+| Live map | The animals at their last position, with tracks, and as further layers the sensors, people, detectors, events (reports, contacts and alarms), living labs and zones |
 | Animals | Every animal with a sensor: species, last seen, last position. A page per animal with its track, charts and readings |
 | Sensors | The sensors behind the animals, and where a sensor is added by its ID. A page per sensor with the same data from the technical side |
 | Detections | What camera traps and other detectors saw, as a list |
+| People | The people in the data you may read, each with where the recreation app recorded them, their contacts with animals, the messages they got and the reports they made |
 | Reports | What people reported: a sighting, damage or a collision with an animal |
+| Contacts | A person's phone was near an animal's sensor for some time |
 | Alarms | An animal, a detection or a report came inside a zone |
+| Messages | The messages and alarms that were shown to people, with who got them and why |
 | Data explorer | Temperature, altitude, speed and acceleration over time, one chart per metric and one line per animal |
 | Database | What WildlifeNL stores and how it hangs together, with a link from each kind of record to its list in the app |
 | Living labs, Zones | The research areas with their boundary and visits, and the zones you drew |
 | Experiments | The studies with their questionnaires, messages, responses and more |
-| Species, People | The species WildlifeNL knows, and the accounts with their roles |
+| Species | The species WildlifeNL knows |
 | Account, About | Your roles and what they allow; what the app is |
 
 Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The app has a light and a dark theme and works on a phone.
@@ -39,6 +42,7 @@ WildlifeNL decides per role what an account may read, and the navigation only sh
 | Detections, reports from others, visits of a living lab | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Zones | `land-user` or `wildlife-manager` |
 | Experiments and everything under them | `researcher` |
+| Where other people were, their contacts and the messages they got | `researcher`, per experiment; every account sees its own |
 | All alarms | `administrator` or `researcher`; every account sees its own |
 | The accounts | `administrator` |
 | Species, living labs, report types, roles | Any account |
@@ -53,12 +57,15 @@ Where a record names another one, the app links to it: an animal to its species 
 
 The map is laid out like the live map of Protect.
 
-- **Layers** (top left) opens a panel with a tab per kind: Animals, Sensors, Detectors, Reports and Areas. Each tab has a search, a choice to group the rows or not, sorting by name or by last update, groups that fold, a tick per row and per group, and a line to show, hide, unfold or fold everything. Reset puts it all back.
-- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it. The Sensors tab holds only sensors that are not on an animal.
+- **Layers** (top left) opens a panel with a tab per kind: Animals, Sensors, People, Detectors, Events and Areas. Each tab has a search, a choice to group the rows or not, sorting by name or by last update, groups that fold, a tick per row and per group, and a line to show, hide, unfold or fold everything. Reset puts it all back.
+- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it.
+- **Sensors** lists every sensor, to look at the data from the side of the sensor. A sensor on an animal is drawn as a sensor once you tick or pick it; until then its animal stands for it.
+- **People** are where the recreation app last recorded them, each with a track like an animal.
+- **Events** are the reports from people, the contacts between a person and an animal, and the alarms, grouped per kind.
 - **Areas** are the living labs, and your zones if you have any. The panel of a living lab can show where people were in the last 30 days.
 - **Tools** (top right, square buttons): the base map, 3D terrain, measuring a distance, and the tracks with their length (24 hours to everything) once a track is on. Up to eight tracks at a time, each in its own colour.
 - **Base maps:** Light, Streets, Bright and Night from OpenFreeMap, Satellite (Esri World Imagery), Aerial photo of the Netherlands (PDOK) and Topographic (OpenTopoMap). The default follows the theme. None needs a key.
-- **Markers:** an animal is a disc with the icon of its species, a sensor without an animal a rounded square, a detector a diamond with a camera and a report a sand coloured diamond. Animals that would overlap become one disc with a number; click it to zoom in.
+- **Markers:** an animal is a disc with the icon of its species, a sensor a rounded square, a person a disc with a person, a detector a diamond with a camera, and a report, a contact or an alarm a sand coloured diamond. Animals that would overlap become one disc with a number; click it to zoom in.
 - **Click anything** for its panel, with icon buttons to its page, its data and its place.
 
 ### Detections

@@ -16,8 +16,9 @@ function read() {
 }
 
 /** What the person chose in the panel, kept in this browser: per tab the hidden rows, the
- * folded groups, whether the rows are grouped and how they are sorted. */
-export const choices = { tab: "animals", hidden: {}, folded: {}, flat: {}, sort: {}, ...read() };
+ * rows that are off by default and were switched on (`shown`), the folded groups, whether
+ * the rows are grouped and how they are sorted. */
+export const choices = { tab: "animals", hidden: {}, shown: {}, folded: {}, flat: {}, sort: {}, ...read() };
 
 export function saveChoices() {
   try {
@@ -28,12 +29,12 @@ export function saveChoices() {
 }
 
 export function resetChoices() {
-  Object.assign(choices, { hidden: {}, folded: {}, flat: {}, sort: {} });
+  Object.assign(choices, { hidden: {}, shown: {}, folded: {}, flat: {}, sort: {} });
   saveChoices();
 }
 
 export function isCustomised() {
-  return [choices.hidden, choices.folded, choices.flat, choices.sort].some((part) => Object.values(part).some((value) => (Array.isArray(value) ? value.length : value)));
+  return [choices.hidden, choices.shown, choices.folded, choices.flat, choices.sort].some((part) => Object.values(part).some((value) => (Array.isArray(value) ? value.length : value)));
 }
 
 function setOf(part, tab) {
@@ -45,14 +46,17 @@ function store(part, tab, set) {
   saveChoices();
 }
 
-/** Whether a row of a tab is shown on the map. */
-export function isShown(tab, id) {
-  return !(choices.hidden[tab] || []).includes(id);
+/** Whether a row of a tab is shown on the map. A row that is `off` by default is only shown
+ * once it was ticked. */
+export function isShown(tab, id, off = false) {
+  return off ? (choices.shown[tab] || []).includes(id) : !(choices.hidden[tab] || []).includes(id);
 }
 
-export function show(tab, id) {
-  const hidden = setOf("hidden", tab);
-  if (hidden.delete(id)) store("hidden", tab, hidden);
+/** Shows a row, whatever its default. */
+export function show(tab, id, off = false) {
+  const part = off ? "shown" : "hidden";
+  const set = setOf(part, tab);
+  if (off ? !set.has(id) && set.add(id) : set.delete(id)) store(part, tab, set);
 }
 
 /** A tick that can also be half on: some of the rows below are shown. */
@@ -66,16 +70,23 @@ function tick(checked, half, label, onChange) {
 /**
  * Draws one tab.
  * @param tab the key of the tab, under which its choices are kept
- * @param items `{id, name, sub, group, time, icon, selected, actions}`: `group` is the name
- *   of the group, `time` what "by last update" sorts on, `icon` a file of assets/img/icons,
- *   `actions` nodes at the end of the row
+ * @param items `{id, name, sub, group, time, icon, selected, off, actions}`: `group` is the
+ *   name of the group, `time` what "by last update" sorts on, `icon` a file of
+ *   assets/img/icons, `off` a row that is not shown until it is ticked, `actions` nodes at
+ *   the end of the row
  * @param options `{target, noun, groupLabel, empty, onChange, onPick, onDraw}`: `groupLabel`
  *   names the arrangement ("Per species"); `onChange` runs when what is shown changed,
  *   `onDraw` after every draw, also one that only folds or sorts
  */
 export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange, onPick, onDraw }) {
   const hidden = setOf("hidden", tab);
+  const shown = setOf("shown", tab);
   const folded = setOf("folded", tab);
+  const on = (item) => (item.off ? shown.has(item.id) : !hidden.has(item.id));
+  const turn = (item, value) => {
+    if (item.off) value ? shown.add(item.id) : shown.delete(item.id);
+    else value ? hidden.delete(item.id) : hidden.add(item.id);
+  };
   const flat = Boolean(choices.flat[tab]) || !groupLabel;
   const byTime = choices.sort[tab] === "recent";
   const previous = target.querySelector("input[type=search]");
@@ -83,6 +94,7 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
   const redraw = () => drawTab(tab, items, { target, noun, groupLabel, empty, onChange, onPick, onDraw });
   const changed = () => {
     store("hidden", tab, hidden);
+    store("shown", tab, shown);
     onChange();
     redraw();
   };
@@ -100,9 +112,8 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
 
   const row = (item, depth) =>
     el("div", { class: `layer-row${item.selected ? " selected" : ""}`, style: `padding-left:${6 + depth * 18}px` }, [
-      tick(!hidden.has(item.id), false, `Show ${item.name}`, (on) => {
-        if (on) hidden.delete(item.id);
-        else hidden.add(item.id);
+      tick(on(item), false, `Show ${item.name}`, (value) => {
+        turn(item, value);
         changed();
       }),
       item.icon ? el("img", { class: "layer-icon", src: `assets/img/icons/${item.icon}.svg`, alt: "" }) : null,
@@ -117,7 +128,7 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
       rows.push(...members.map((item) => row(item, 0)));
       continue;
     }
-    const shown = members.filter((item) => !hidden.has(item.id)).length;
+    const count = members.filter(on).length;
     const open = !folded.has(name) || Boolean(term);
     rows.push(
       el("div", { class: "layer-row header" }, [
@@ -127,15 +138,12 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
           store("folded", tab, folded);
           redraw();
         } }, icon(open ? "chevron-down" : "chevron-right")),
-        tick(shown === members.length, shown > 0, `Show ${name}`, (on) => {
-          for (const item of members) {
-            if (on) hidden.delete(item.id);
-            else hidden.add(item.id);
-          }
+        tick(count === members.length, count > 0, `Show ${name}`, (value) => {
+          for (const item of members) turn(item, value);
           changed();
         }),
         el("strong", { class: "layer-group", text: name }),
-        el("small", { class: "layer-count", text: shown === members.length ? String(members.length) : `${shown} of ${members.length}` }),
+        el("small", { class: "layer-count", text: count === members.length ? String(members.length) : `${count} of ${members.length}` }),
       ]),
     );
     if (open) rows.push(...members.map((item) => row(item, 1)));
@@ -160,16 +168,13 @@ export function drawTab(tab, items, { target, noun, groupLabel, empty, onChange,
     saveChoices();
     redraw();
   } }, icon(byTime ? "sort-time" : "sort-name"));
-  const shownCount = items.filter((item) => !hidden.has(item.id)).length;
-  const all = (on) => {
-    for (const item of items) {
-      if (on) hidden.delete(item.id);
-      else hidden.add(item.id);
-    }
+  const shownCount = items.filter(on).length;
+  const all = (value) => {
+    for (const item of items) turn(item, value);
     changed();
   };
-  const fold = (on) => {
-    store("folded", tab, new Set(on ? names : []));
+  const fold = (value) => {
+    store("folded", tab, new Set(value ? names : []));
     redraw();
   };
   const link = (text, onclick) => el("button", { class: "btn link", type: "button", text, onclick });

@@ -1213,7 +1213,7 @@ a.btn {
 }
 
 .tab {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   height: 1.75rem;
   padding: 0 0.125rem;

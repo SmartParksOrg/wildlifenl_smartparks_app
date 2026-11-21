@@ -8,6 +8,7 @@ import { SCOPES } from "../api.js";
 import { counted, detections, detectorsOf, loadDetections, onDetections, reportPlace, searchBox, speciesName, stopSearch } from "../detections.js";
 import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toTime, trackLength, webLink, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
+import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, personName } from "../people.js";
 import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
@@ -16,17 +17,19 @@ import { choices, drawTab, isCustomised, isShown, openTab, resetChoices, show as
 
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
-const TABS = ["animals", "sensors", "detectors", "reports", "areas"];
+const TABS = ["animals", "sensors", "people", "detectors", "events", "areas"];
 
 /** @type {LiveMap|null} */
 let map = null;
 let sensors = [];
 /** living labs and zones: `{id, name, kind, record, points}` */
 let areas = [];
-/** sensor id to its slot in TRACK_COLORS; a track keeps its colour while it is shown */
+/** track key to its slot in TRACK_COLORS; a track keeps its colour while it is shown. The key
+ * is a sensor ID, or `p:` and a user ID for the track of a person. */
 const tracks = new Map();
-/** what is selected: `{kind, id}` with kind animals, sensors, detectors, reports or areas;
- * an animal is known here by the ID of its sensor, where its data comes from */
+/** what is selected: `{kind, id}` with the kind of a tab of the layers panel. An animal is
+ * known here by the ID of its sensor, where its data comes from; a person by the user ID; an
+ * event by a letter and its ID: `r:` a report, `c:` a contact, `l:` an alarm. */
 let selected = { kind: "", id: "" };
 /** the area whose visits are drawn, and those visits */
 let visits = { area: "", cells: [] };
@@ -38,11 +41,18 @@ function trackHours() {
   return value === "all" ? NaN : Number(value);
 }
 
-function trackPoints(id) {
-  const loaded = loadedReadings(id);
-  if (!loaded) return [];
+function trackPoints(key) {
   const hours = trackHours();
-  return withinWindow(loaded.track, Number.isFinite(hours) ? Date.now() - hours * HOUR : NaN, NaN);
+  const from = Number.isFinite(hours) ? Date.now() - hours * HOUR : NaN;
+  if (key.startsWith("p:")) return withinWindow(people.tracks.get(key.slice(2)) || [], from, NaN);
+  const loaded = loadedReadings(key);
+  return loaded ? withinWindow(loaded.track, from, NaN) : [];
+}
+
+function trackName(key) {
+  if (key.startsWith("p:")) return personName(key.slice(2));
+  const sensor = sensorById(key);
+  return sensor ? sensor.name : key;
 }
 
 /** The tab a sensor belongs to: an animal when it is on one, else a sensor on its own. */
@@ -99,25 +109,79 @@ function reportTime(report) {
   return toTime(report.moment || report.timestamp);
 }
 
-function reportList() {
-  return [...detections.reports.values()].map((report) => ({ report, place: reportPlace(report) })).filter((item) => item.place);
-}
-
 function detectorList() {
   return hasScope(SCOPES.detections) ? detectorsOf() : [];
 }
 
+/** Everything that happened at a place and is no detection: reports, contacts and alarms. */
+function eventList() {
+  const events = [];
+  for (const report of detections.reports.values()) {
+    const place = reportPlace(report);
+    if (!place) continue;
+    events.push({
+      id: `r:${report.ID}`,
+      name: [report.species && (report.species.commonName || report.species.name), formatMoment(reportTime(report))].filter(Boolean).join(", "),
+      sub: [report.user && report.user.name, report.notes].filter(Boolean).join(" · "),
+      group: reportName(report),
+      time: reportTime(report),
+      icon: reportIcon(report),
+      label: reportName(report),
+      place,
+    });
+  }
+  for (const contact of people.contacts) {
+    const place = contactPlace(contact);
+    if (!place) continue;
+    const animal = contact.borneSensorDeployment && contact.borneSensorDeployment.animal;
+    events.push({
+      id: `c:${contact.ID}`,
+      name: [contact.user && contact.user.name, animal && animal.name].filter(Boolean).join(" and ") || "Contact",
+      sub: formatMoment(toTime(contact.start)),
+      group: "Contacts",
+      time: toTime(contact.start),
+      icon: "person",
+      label: "Contact",
+      place,
+    });
+  }
+  for (const alarm of people.alarms) {
+    const place = alarmPlace(alarm);
+    if (!place) continue;
+    events.push({
+      id: `l:${alarm.ID}`,
+      name: `${(alarm.zone && alarm.zone.name) || "Zone"}: ${alarmCause(alarm) || "alarm"}`,
+      sub: formatMoment(toTime(alarm.timestamp)),
+      group: "Alarms",
+      time: toTime(alarm.timestamp),
+      icon: "alarm",
+      label: "Alarm",
+      place,
+    });
+  }
+  return events;
+}
+
+/** The animals, and the sensors that are shown as sensors: the ones without an animal, and
+ * any other the person ticked in the Sensors tab. */
 function drawSensors() {
-  const shown = sensors.filter((sensor) => sensor.place && isShown(tabOf(sensor), sensor.id));
-  map.setItems("sensors", shown.map((sensor) => ({ id: sensor.id, name: sensor.name, icon: iconOf(sensor), lat: sensor.place.lat, lng: sensor.place.lng, selected: isSelected(tabOf(sensor), sensor.id) })));
+  const items = [];
+  for (const sensor of sensors) {
+    if (!sensor.place) continue;
+    const at = { lat: sensor.place.lat, lng: sensor.place.lng };
+    if (sensor.animal && isShown("animals", sensor.id)) items.push({ id: `a:${sensor.id}`, name: sensor.name, icon: iconOf(sensor), ...at, selected: isSelected("animals", sensor.id) });
+    if (isShown("sensors", sensor.id, Boolean(sensor.animal))) items.push({ id: `s:${sensor.id}`, name: sensor.id, icon: "sensor", ...at, selected: isSelected("sensors", sensor.id) });
+  }
+  map.setItems("sensors", items);
   // the count is about animals; sensors only count when no animal is known at all
   const animals = sensors.filter((sensor) => sensor.animal);
   const subject = animals.length ? animals : sensors;
   const noun = animals.length ? "animal" : "sensor";
-  const visible = shown.filter((sensor) => subject.includes(sensor)).length;
+  const visible = subject.filter((sensor) => sensor.place && isShown(tabOf(sensor), sensor.id)).length;
   const placed = subject.filter((sensor) => sensor.place).length;
   $("mapCount").textContent = visible === subject.length ? plural(subject.length, noun) : `${visible} of ${plural(subject.length, noun)}`;
   $("mapCount").title = placed < subject.length ? `${subject.length - placed} without a position yet` : "";
+  const shown = sensors.filter((sensor) => sensor.place && isShown(tabOf(sensor), sensor.id));
   if (!fitted && shown.length) {
     fitted = true;
     map.fit(shown.map((sensor) => sensor.place), { maxZoom: 15 });
@@ -125,10 +189,7 @@ function drawSensors() {
 }
 
 function drawTracks() {
-  const drawn = [...tracks.entries()].map(([id, slot]) => {
-    const sensor = sensorById(id);
-    return { id, name: sensor ? sensor.name : id, slot, points: trackPoints(id) };
-  });
+  const drawn = [...tracks.entries()].map(([key, slot]) => ({ id: key, name: trackName(key), slot, points: trackPoints(key) }));
   map.setTracks(drawn);
   const points = drawn.reduce((sum, track) => sum + track.points.length, 0);
   $("mapTracksWrap").hidden = drawn.length === 0;
@@ -137,15 +198,20 @@ function drawTracks() {
   if (!drawn.length) showCard("tracksCard", false);
 }
 
-/** Detectors and reports on the map, and the line under their tabs. */
+/** People where they were last recorded. */
+function drawPeople() {
+  const items = [];
+  for (const [id, track] of people.tracks) {
+    const last = track[track.length - 1];
+    if (last && isShown("people", id)) items.push({ id, name: personName(id), lat: last.lat, lng: last.lng, selected: isSelected("people", id) });
+  }
+  map.setItems("people", items);
+}
+
+/** Detectors and events on the map, and the line under their tabs. */
 function drawFinds() {
   map.setItems("detectors", detectorList().filter((d) => isShown("detectors", d.id)).map((d) => ({ id: d.id, name: d.name, lat: d.lat, lng: d.lng, selected: isSelected("detectors", d.id) })));
-  map.setItems(
-    "reports",
-    reportList()
-      .filter(({ report }) => isShown("reports", report.ID))
-      .map(({ report, place }) => ({ id: report.ID, name: reportName(report), icon: reportIcon(report), lat: place.lat, lng: place.lng, selected: isSelected("reports", report.ID) })),
-  );
+  map.setItems("reports", eventList().filter((event) => isShown("events", event.id)).map((event) => ({ id: event.id, name: event.label, icon: event.icon, lat: event.place.lat, lng: event.place.lng, selected: isSelected("events", event.id) })));
   const found = detections.found.size + detections.reports.size;
   $("layerFindText").textContent = detections.progress || (found ? `${plural(detections.found.size, "detection")} and ${plural(detections.reports.size, "report")}, ${detections.from} to ${detections.to}` : detections.message);
   $("layerFindStop").hidden = !detections.busy;
@@ -163,44 +229,64 @@ function drawPanel() {
   const offerReset = () => ($("layerReset").hidden = !isCustomised());
   const again = () => {
     drawSensors();
+    drawPeople();
     drawFinds();
     drawAreas();
   };
+  const tab = (key, items, options) => drawTab(key, items, { target: $(`layerTab-${key}`), onChange: again, onDraw: offerReset, onPick: pick(key), ...options });
   const locate = (kind, id, disabled = false) => rowButton("locate", "Show on map", () => select(kind, id, true), { disabled });
-  const sensorRow = (sensor) => {
-    const tracked = tracks.has(sensor.id);
-    const tab = tabOf(sensor);
-    return {
-      id: sensor.id,
-      name: sensor.name,
-      sub: [sensor.animal ? `sensor ${sensor.id}` : "", sensor.place ? "" : "no position yet"].filter(Boolean).join(" · "),
-      group: sensor.species || "Species unknown",
-      time: sensor.place ? sensor.place.t : 0,
-      icon: iconOf(sensor),
-      selected: isSelected(tab, sensor.id),
-      actions: [rowButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { active: tracked, colour: tracked ? trackColor(tracks.get(sensor.id)) : "" }), locate(tab, sensor.id, !sensor.place)],
-    };
+  const trackButton = (key) => {
+    const tracked = tracks.has(key);
+    return rowButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(key), { active: tracked, colour: tracked ? trackColor(tracks.get(key)) : "" });
   };
-  drawTab("animals", sensors.filter((sensor) => sensor.animal).map(sensorRow), {
-    target: $("layerTab-animals"),
-    noun: "animal",
-    groupLabel: "Per species",
-    empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : "The animals need the herd-manager role. A sensor you added by its ID is under Sensors.",
-    onChange: again,
-    onDraw: offerReset,
-    onPick: pick("animals"),
-  });
-  // only the sensors that are not on an animal: the others are their animal
-  const bare = sensors.filter((sensor) => !sensor.animal);
-  drawTab("sensors", bare.map(sensorRow), {
-    target: $("layerTab-sensors"),
-    noun: "sensor",
-    empty: el("span", {}, [sensors.length ? "Every sensor is on an animal, see Animals. " : "", "Add a sensor by its ID on the ", el("a", { href: buildHash("sensors"), text: "Sensors page" }), "."]),
-    onChange: again,
-    onDraw: offerReset,
-    onPick: pick("sensors"),
-  });
-  drawTab(
+
+  tab(
+    "animals",
+    sensors
+      .filter((sensor) => sensor.animal)
+      .map((sensor) => ({
+        id: sensor.id,
+        name: sensor.name,
+        sub: [`sensor ${sensor.id}`, sensor.place ? "" : "no position yet"].filter(Boolean).join(" · "),
+        group: sensor.species || "Species unknown",
+        time: sensor.place ? sensor.place.t : 0,
+        icon: iconOf(sensor),
+        selected: isSelected("animals", sensor.id),
+        actions: [trackButton(sensor.id), locate("animals", sensor.id, !sensor.place)],
+      })),
+    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : "The animals need the herd-manager role. A sensor you added by its ID is under Sensors." },
+  );
+  // every sensor, to look at the data from the side of the sensor. One that is on an animal
+  // is not drawn until it is ticked: its animal is on the map already.
+  tab(
+    "sensors",
+    sensors.map((sensor) => ({
+      id: sensor.id,
+      name: sensor.id,
+      sub: [sensor.animal ? `on ${sensor.animal.name}` : "", sensor.place ? "" : "no position yet"].filter(Boolean).join(" · "),
+      group: sensor.animal ? "On an animal" : "Without an animal",
+      time: sensor.place ? sensor.place.t : 0,
+      icon: "sensor",
+      selected: isSelected("sensors", sensor.id),
+      off: Boolean(sensor.animal),
+      actions: [trackButton(sensor.id), locate("sensors", sensor.id, !sensor.place)],
+    })),
+    { noun: "sensor", groupLabel: "By animal", empty: el("span", {}, ["No sensors yet. Add one by its ID on the ", el("a", { href: buildHash("sensors"), text: "Sensors page" }), "."]) },
+  );
+  tab(
+    "people",
+    [...people.tracks.entries()].map(([id, track]) => ({
+      id,
+      name: personName(id),
+      sub: `${plural(track.length, "position")}, last ${ago(track[track.length - 1].t)}`,
+      time: track[track.length - 1].t,
+      icon: "person",
+      selected: isSelected("people", id),
+      actions: [trackButton(`p:${id}`), locate("people", id)],
+    })),
+    { noun: "person", empty: people.busy ? "Loading…" : people.message || (hasScope(SCOPES.research) ? "No tracking readings in the experiments." : "No tracking readings of your own. Those of other people need the researcher role.") },
+  );
+  tab(
     "detectors",
     detectorList().map((d) => ({
       id: d.id,
@@ -212,23 +298,14 @@ function drawPanel() {
       selected: isSelected("detectors", d.id),
       actions: [locate("detectors", d.id)],
     })),
-    { target: $("layerTab-detectors"), noun: "detector", groupLabel: "Per sender", empty: hasScope(SCOPES.detections) ? "No detectors found yet. Search this view below." : `Detections need one of these roles: ${SCOPES.detections.join(", ")}.`, onChange: again, onDraw: offerReset, onPick: pick("detectors") },
+    { noun: "detector", groupLabel: "Per sender", empty: hasScope(SCOPES.detections) ? "No detectors found yet. Search this view below." : `Detections need one of these roles: ${SCOPES.detections.join(", ")}.` },
   );
-  drawTab(
-    "reports",
-    reportList().map(({ report }) => ({
-      id: report.ID,
-      name: [report.species && (report.species.commonName || report.species.name), formatMoment(reportTime(report))].filter(Boolean).join(", "),
-      sub: [report.user && report.user.name, report.notes].filter(Boolean).join(" · "),
-      group: reportName(report),
-      time: reportTime(report),
-      icon: reportIcon(report),
-      selected: isSelected("reports", report.ID),
-      actions: [locate("reports", report.ID)],
-    })),
-    { target: $("layerTab-reports"), noun: "report", groupLabel: "Per kind", empty: hasScope(SCOPES.reports) ? "No reports found yet. Search this view below." : `Reports need one of these roles: ${SCOPES.reports.join(", ")}.`, onChange: again, onDraw: offerReset, onPick: pick("reports") },
+  tab(
+    "events",
+    eventList().map((event) => ({ id: event.id, name: event.name, sub: event.sub, group: event.group, time: event.time, icon: event.icon, selected: isSelected("events", event.id), actions: [locate("events", event.id)] })),
+    { noun: "event", groupLabel: "Per kind", empty: "No reports, contacts or alarms yet. Search this view below for reports; contacts and alarms of others need the researcher role." },
   );
-  drawTab(
+  tab(
     "areas",
     areas.map((area) => ({
       id: area.id,
@@ -239,9 +316,9 @@ function drawPanel() {
       selected: isSelected("areas", area.id),
       actions: [locate("areas", area.id, area.points.length < 3)],
     })),
-    { target: $("layerTab-areas"), noun: "area", groupLabel: "Per kind", empty: "No living labs or zones to show.", onChange: again, onDraw: offerReset, onPick: pick("areas") },
+    { noun: "area", groupLabel: "Per kind", empty: "No living labs or zones to show." },
   );
-  $("layerFind").hidden = !["detectors", "reports"].includes(choices.tab);
+  $("layerFind").hidden = !["detectors", "events"].includes(choices.tab);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -265,7 +342,8 @@ function link(href, text) {
   return el("a", { href, text });
 }
 
-function sensorPanel(sensor) {
+/** The panel of an animal, or of a sensor when it was picked as a sensor. */
+function sensorPanel(sensor, asSensor) {
   const loaded = recentReadings(sensor.id); // the newest readings are enough for these facts
   const all = loadedReadings(sensor.id);
   const track = loaded ? loaded.track : [];
@@ -277,23 +355,89 @@ function sensorPanel(sensor) {
   const tracked = tracks.has(sensor.id);
   const inPeriod = trackPoints(sensor.id);
   const animal = sensor.animal;
+  const led = asSensor || !animal;
   return [
-    panelHead(iconOf(sensor), sensor.name, animal ? sensor.species || "animal" : "sensor without an animal"),
+    led ? panelHead("sensor", sensor.id, animal ? `sensor on ${animal.name}` : "sensor without an animal") : panelHead(iconOf(sensor), sensor.name, sensor.species || "animal"),
     factList([
       ["Last seen", loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
       ["Position", last ? formatMoment(last.t) : loaded ? (loaded.complete ? "none yet" : "not recently") : ""],
       ["Coordinates", sensor.place ? `${sensor.place.lat.toFixed(5)}, ${sensor.place.lng.toFixed(5)}` : ""],
       ["Temperature", temperature == null ? "" : `${temperature} °C`],
+      ["Animal", led && animal ? link(buildHash("animals", animal.ID), animal.name) : ""],
       ["Species", animal && animal.species ? link(recordHash("species", animal.species.ID), sensor.species) : ""],
-      ["Sensor", animal ? link(buildHash("sensors", sensor.id), sensor.id) : ""],
+      ["Sensor", led ? "" : link(buildHash("sensors", sensor.id), sensor.id)],
       ["Track", all && tracked ? `${inPeriod.length.toLocaleString()} of ${plural(all.track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` : ""],
     ]),
     el("div", { class: "row" }, [
       iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { on: tracked }),
       iconButton("locate", "Centre the map here", () => sensor.place && map.flyTo(sensor.place), { disabled: !sensor.place }),
-      animal ? iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }) : iconButton("sensor", "Open the sensor", null, { href: buildHash("sensors", sensor.id) }),
+      led ? iconButton("sensor", "Open the sensor", null, { href: buildHash("sensors", sensor.id) }) : iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }),
       iconButton("chart", "Open in the data explorer", null, { href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }),
     ]),
+  ];
+}
+
+function personPanel(id) {
+  const track = people.tracks.get(id) || [];
+  const last = track[track.length - 1];
+  const key = `p:${id}`;
+  const tracked = tracks.has(key);
+  const inPeriod = trackPoints(key);
+  const contacts = people.contacts.filter((c) => c.user && c.user.ID === id).length;
+  const messages = people.conveyances.filter((c) => c.user && c.user.ID === id).length;
+  return [
+    panelHead("person", personName(id), "person"),
+    factList([
+      ["Last seen", last ? ago(last.t) : "never"],
+      ["Position", last ? formatMoment(last.t) : ""],
+      ["Coordinates", last ? `${last.lat.toFixed(5)}, ${last.lng.toFixed(5)}` : ""],
+      ["Positions", track.length.toLocaleString()],
+      ["Contacts", contacts ? link(recordHash("contacts"), `${contacts} with an animal`) : "none"],
+      ["Messages", messages ? link(recordHash("conveyances"), `${messages} received`) : "none"],
+      ["Track", tracked ? `${inPeriod.length.toLocaleString()} of ${plural(track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` : ""],
+    ]),
+    el("div", { class: "row" }, [
+      iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(key), { on: tracked }),
+      iconButton("locate", "Centre the map here", () => last && map.flyTo(last), { disabled: !last }),
+      iconButton("user", "Open the person", null, { href: recordHash("people", id) }),
+    ]),
+  ];
+}
+
+function contactPanel(contact, place) {
+  const deployment = contact.borneSensorDeployment || {};
+  const animal = deployment.animal;
+  const start = toTime(contact.start);
+  const end = toTime(contact.end);
+  const minutes = Number.isFinite(end) ? Math.max(1, Math.round((end - start) / 60000)) : NaN;
+  return [
+    panelHead("person", "Contact", "a person near an animal"),
+    factList([
+      ["Person", contact.user ? link(recordHash("people", contact.user.ID), contact.user.name) : ""],
+      ["Animal", animal ? link(buildHash("animals", animal.ID), animal.name) : ""],
+      ["Sensor", deployment.sensorID ? link(buildHash("sensors", deployment.sensorID), deployment.sensorID) : ""],
+      ["Began", `${formatMoment(start)} (${ago(start)})`],
+      ["Lasted", Number.isFinite(minutes) ? plural(minutes, "minute") : "still going on"],
+      ["Messages", (contact.conveyances || []).length ? plural(contact.conveyances.length, "message") : ""],
+      ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
+    ]),
+    el("div", { class: "row" }, [iconButton("list", "Open the contact", null, { href: recordHash("contacts", contact.ID) }), iconButton("locate", "Centre the map here", () => map.flyTo(place))]),
+  ];
+}
+
+function alarmPanel(alarm, place) {
+  return [
+    panelHead("alarm", "Alarm", alarmCause(alarm) || "in a zone"),
+    factList([
+      ["When", `${formatMoment(toTime(alarm.timestamp))} (${ago(toTime(alarm.timestamp))})`],
+      ["Zone", alarm.zone ? link(recordHash("zones", alarm.zone.ID), alarm.zone.name || "Zone") : ""],
+      ["Animal", alarm.animal ? link(buildHash("animals", alarm.animal.ID), alarm.animal.name) : ""],
+      ["Detection", alarm.detection ? link(buildHash("detections", "", { detector: alarm.detection.deploymentID }), `at ${alarm.detection.deploymentID}`) : ""],
+      ["Report", alarm.interaction ? link(recordHash("reports", alarm.interaction.ID), "open the report") : ""],
+      ["Messages", (alarm.conveyances || []).length ? `${plural(alarm.conveyances.length, "message")} sent` : ""],
+      ["Coordinates", `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`],
+    ]),
+    el("div", { class: "row" }, [iconButton("list", "Open the alarm", null, { href: recordHash("alarms", alarm.ID) }), iconButton("locate", "Centre the map here", () => map.flyTo(place))]),
   ];
 }
 
@@ -361,19 +505,24 @@ function areaPanel(area) {
 
 function drawObjectPanel() {
   const panel = $("objectPanel");
+  const { kind, id } = selected;
   let content = null;
-  if (selected.kind === "animals" || selected.kind === "sensors") {
-    const sensor = sensorById(selected.id);
-    if (sensor) content = sensorPanel(sensor);
-  } else if (selected.kind === "detectors") {
-    const detector = detectorsOf().find((d) => d.id === selected.id);
+  if (kind === "animals" || kind === "sensors") {
+    const sensor = sensorById(id);
+    if (sensor) content = sensorPanel(sensor, kind === "sensors");
+  } else if (kind === "people") {
+    if (people.tracks.has(id)) content = personPanel(id);
+  } else if (kind === "detectors") {
+    const detector = detectorsOf().find((d) => d.id === id);
     if (detector) content = detectorPanel(detector);
-  } else if (selected.kind === "reports") {
-    const report = detections.reports.get(selected.id);
-    const place = report && reportPlace(report);
-    if (place) content = reportPanel(report, place);
-  } else if (selected.kind === "areas") {
-    const area = areas.find((a) => a.id === selected.id);
+  } else if (kind === "events") {
+    const key = id.slice(2);
+    const place = placeOf(kind, id);
+    if (place && id.startsWith("r:")) content = reportPanel(detections.reports.get(key), place);
+    if (place && id.startsWith("c:")) content = contactPanel(people.contacts.find((c) => String(c.ID) === key), place);
+    if (place && id.startsWith("l:")) content = alarmPanel(people.alarms.find((a) => String(a.ID) === key), place);
+  } else if (kind === "areas") {
+    const area = areas.find((a) => a.id === id);
     if (area) content = areaPanel(area);
   }
   panel.hidden = !content;
@@ -382,6 +531,7 @@ function drawObjectPanel() {
 
 function redraw() {
   drawSensors();
+  drawPeople();
   drawTracks();
   drawFinds();
   drawAreas();
@@ -462,14 +612,16 @@ async function ensureReadings(id) {
 /** Where a selected thing is, to fly there. */
 function placeOf(kind, id) {
   if (kind === "animals" || kind === "sensors") return (sensorById(id) || {}).place || null;
+  if (kind === "people") return (people.tracks.get(id) || []).slice(-1)[0] || null;
   if (kind === "detectors") return detectorsOf().find((d) => d.id === id) || null;
-  if (kind === "reports") return detections.reports.has(id) ? reportPlace(detections.reports.get(id)) : null;
+  if (kind === "events") return (eventList().find((event) => event.id === id) || {}).place || null;
   return null;
 }
 
 async function select(kind, id, fly = false) {
   selected = { kind, id };
-  if (kind && id) showRow(kind, id); // a hidden row that is picked is shown again
+  // a row that is picked is shown, also a sensor on an animal, which is off until then
+  if (kind && id) showRow(kind, id, kind === "sensors" && Boolean((sensorById(id) || {}).animal));
   redraw();
   if (!kind) return;
   if (fly) {
@@ -488,17 +640,18 @@ async function select(kind, id, fly = false) {
   if (isSelected(kind, id)) redraw();
 }
 
-async function toggleTrack(id, force) {
-  const on = force ?? !tracks.has(id);
-  if (!on) tracks.delete(id);
-  else if (!tracks.has(id)) {
+/** Shows or hides a track; `key` is a sensor ID, or `p:` and a user ID for a person. */
+async function toggleTrack(key, force) {
+  const on = force ?? !tracks.has(key);
+  if (!on) tracks.delete(key);
+  else if (!tracks.has(key)) {
     const used = new Set(tracks.values());
     const slot = TRACK_COLORS.findIndex((_, index) => !used.has(index));
     if (slot < 0) return toast(`At most ${TRACK_COLORS.length} tracks at a time. Hide one first.`, true);
-    tracks.set(id, slot);
-    if (!(await ensureReadings(id))) tracks.delete(id);
+    tracks.set(key, slot);
+    if (!key.startsWith("p:") && !(await ensureReadings(key))) tracks.delete(key);
     else {
-      const points = trackPoints(id);
+      const points = trackPoints(key);
       if (points.length > 1) map.fit(points, { animate: true });
       else toast(points.length ? "Only one position in this period" : "No positions in this period. Choose a longer track length under Tracks.");
     }
@@ -626,7 +779,14 @@ function wire() {
     if ($("view-map").hidden) return;
     drawFinds();
     drawPanel();
-    if (["detectors", "reports"].includes(selected.kind)) drawObjectPanel();
+    if (["detectors", "events"].includes(selected.kind)) drawObjectPanel();
+  });
+  onPeople(() => {
+    if ($("view-map").hidden) return;
+    drawPeople();
+    drawFinds();
+    drawPanel();
+    if (["people", "events"].includes(selected.kind)) drawObjectPanel();
   });
   document.addEventListener("themechange", drawPanel); // the track buttons follow the theme
 }
@@ -638,14 +798,16 @@ async function searchDone() {
 
 /**
  * Shows the page. The address can point at something:
- * `?animal=ID` or `?sensor=ID` (with `&track=1` for the track), `?detector=NAME`, `?report=ID`, `?area=ID`,
+ * `?animal=ID` or `?sensor=ID` (with `&track=1` for the track), `?person=ID`, `?detector=NAME`,
+ * `?report=ID`, `?event=c:ID` for a contact or `l:ID` for an alarm, `?area=ID`,
  * `?at=LAT,LNG`, and `?layers=TAB` to open the layers panel at a tab.
  */
 export async function show({ query }) {
   if (!map) {
     map = new LiveMap($("liveMap"), {
-      // the map knows one layer of sensors; here it is an animal when the sensor is on one
-      onPick: (kind, id) => select(kind === "sensors" && sensorById(id) ? tabOf(sensorById(id)) : kind, id),
+      // the map has one layer for animals and sensors, told apart by the first letter of the
+      // ID, and one for every kind of event
+      onPick: (kind, id) => (kind === "sensors" ? select(id.startsWith("a:") ? "animals" : "sensors", id.slice(2)) : select(kind === "reports" ? "events" : kind, id)),
       onNothing: () => select("", ""),
       describePoint: (track, point) => [track.name, pointLines(point)],
       onMeasure: (place) => {
@@ -659,6 +821,7 @@ export async function show({ query }) {
   await reload();
   const areasLoaded = loadAreas();
   if (hasScope(SCOPES.detections) || hasScope(SCOPES.reports)) loadDetections();
+  const peopleLoaded = loadPeople();
   if (query.layers) {
     openTab(TABS.includes(query.layers) ? query.layers : "animals");
     showCard("layerPanel", true);
@@ -666,7 +829,7 @@ export async function show({ query }) {
   }
   const wanted = query.animal ? sensorByAnimal(query.animal) : query.sensor ? sensorById(query.sensor) : null;
   if (wanted) {
-    await select(tabOf(wanted), wanted.id, true);
+    await select(query.animal ? "animals" : "sensors", wanted.id, true);
     if (query.track) await toggleTrack(wanted.id, true);
   }
   if (query.area) {
@@ -677,7 +840,12 @@ export async function show({ query }) {
     await searchDone();
     const detector = query.detector && detectorsOf().find((d) => d.name === query.detector);
     if (detector) select("detectors", detector.id, true);
-    if (query.report && detections.reports.has(query.report)) select("reports", query.report, true);
+    if (query.report && detections.reports.has(query.report)) select("events", `r:${query.report}`, true);
+  }
+  if (query.person || query.event) {
+    await peopleLoaded;
+    if (query.person && people.tracks.has(query.person)) select("people", query.person, true);
+    if (query.event && placeOf("events", query.event)) select("events", query.event, true);
   }
   if (query.at) {
     const [lat, lng] = query.at.split(",").map(Number);
@@ -696,7 +864,7 @@ export function reset() {
   fitted = false;
   if (!map || !map.map) return;
   setMeasuring(false);
-  for (const kind of ["sensors", "detectors", "reports", "areas", "visits"]) map.setItems(kind, []);
+  for (const kind of ["sensors", "people", "detectors", "reports", "areas", "visits"]) map.setItems(kind, []);
   map.setTracks([]);
   for (const id of ["objectPanel", "layerPanel", "tracksCard"]) $(id).hidden = true;
 }

@@ -116,7 +116,7 @@ async function showList(type) {
     const needs = def.needs && def.needs.length && !hasScope(def.needs);
     note(
       $("recordsNote"),
-      [own ? `You see your own ${def.plural.toLowerCase()}. All of them need one of these roles: ${def.needs.join(", ")}.` : needs && !def.list ? `The list of ${def.plural.toLowerCase()} needs one of these roles: ${def.needs.join(", ")}. Records you opened through a link are listed.` : "", !records.length || def.list ? def.hint || "" : ""].filter(Boolean).join(" "),
+      [own && type === "people" ? def.hint : own ? `You see your own ${def.plural.toLowerCase()}. All of them need one of these roles: ${def.needs.join(", ")}.` : needs && !def.list ? `The list of ${def.plural.toLowerCase()} needs one of these roles: ${def.needs.join(", ")}. Records you opened through a link are listed.` : "", !records.length || def.list ? def.hint || "" : ""].filter((text, index, all) => text && all.indexOf(text) === index).join(" "),
     );
   } catch (error) {
     const text = explain(error);
@@ -138,6 +138,9 @@ function outlineOf(record) {
 function mapLink(type, record) {
   if (type === "livinglabs" || type === "zones") return buildHash("map", "", { area: record.ID });
   if (type === "reports") return buildHash("map", "", { report: record.ID });
+  if (type === "people") return buildHash("map", "", { person: record.ID });
+  if (type === "contacts") return buildHash("map", "", { event: `c:${record.ID}` });
+  if (type === "alarms") return buildHash("map", "", { event: `l:${record.ID}` });
   const place = placesOf(record)[0];
   return place ? buildHash("map", "", { at: `${place.lat},${place.lng}` }) : "";
 }
@@ -193,9 +196,11 @@ async function showRecord(type, id) {
   const onMap = mapLink(type, record);
   $("recordOnMap").hidden = !onMap;
   if (onMap) $("recordOnMap").href = onMap;
-  $("recordMapCard").hidden = !(places.length || outline.length > 2);
-  if (places.length || outline.length > 2) {
+  const drawsOnMap = (def.related || []).some((relation) => relation.onMap);
+  $("recordMapCard").hidden = !(places.length || outline.length > 2 || drawsOnMap);
+  if (places.length || outline.length > 2 || drawsOnMap) {
     if (!map) map = new MapView($("recordMap"));
+    map.setTrack(false);
     map.setPoints(places, { describe: (place) => [place.label, [`${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`]] });
     map.setArea(outline.length > 2 ? outline : []);
   }
@@ -220,9 +225,10 @@ async function showRecord(type, id) {
         new DataTable(target, { filename: `wildlifenl-${type}-related`, empty: "Nothing here.", tools: false }).setRows(table.rows, table.options);
         if (relation.onMap && rows.length && map) {
           map.setPoints(
-            rows.filter((row) => isPoint(row.location)).map((row) => ({ lat: row.location.latitude, lng: row.location.longitude, t: row.count, count: row.count })),
-            { fit: false, describe: (point) => [plural(point.count, "visit"), [`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`]] },
+            rows.filter((row) => isPoint(row.location)).map((row) => ({ lat: row.location.latitude, lng: row.location.longitude, t: row.timestamp ? toTime(row.timestamp) : row.count, count: row.count, timestamp: row.timestamp })),
+            { fit: !outline.length, describe: (point) => [point.timestamp ? formatMoment(toTime(point.timestamp)) : plural(point.count, "visit"), [`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`]] },
           );
+          map.setTrack(Boolean(rows[0].timestamp)); // the places of a person are a track, the visits of an area are not
         }
       })
       .catch((error) => {

@@ -21,6 +21,7 @@ function draw() {
     ["Detections, reports from others and visits of a living lab", SCOPES.detections],
     ["Zones", SCOPES.zones],
     ["Experiments with their questionnaires, messages and responses", SCOPES.research],
+    ["Other people: where they were, their contacts and messages (every account sees its own)", SCOPES.research],
     ["All alarms (every account sees its own)", SCOPES.alarms],
     ["The accounts", SCOPES.profiles],
   ];
