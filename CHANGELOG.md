@@ -4,6 +4,24 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.1.0 - 2026-11-21
+
+The app now has the structure of Smart Parks Protect: a live map, a list with a page per sensor, and a data explorer.
+
+### Added
+
+- Live map: a marker per sensor, a layers panel to show, hide and search sensors, tracks in their own colour with a track length, a panel for the selected sensor, a choice of base maps and the detections in view.
+- Sensors page: every sensor with its animal, last reading, last position and number of readings.
+- Sensor page: facts, latest values, the animal, the track, charts of temperature, altitude and speed, and every reading.
+- Data explorer: one chart per metric with a line per sensor, a range and a bucket, the same numbers as a table and as CSV. The view is in the address.
+- Sensors can be added by ID and are remembered in the browser, for accounts that may not list the deployments.
+
+### Changed
+
+- The navigation is a column with the logo, like Protect, and replaces the top bar.
+- The sensor readings page is replaced by the Sensors list and the page per sensor.
+- Readings are fetched once per sensor and shared by all pages.
+
 ## 2.0.0 - 2026-11-21
 
 A rewrite of the single-file client into a small app with the look of Smart Parks Protect.

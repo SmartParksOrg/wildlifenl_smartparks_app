@@ -111,3 +111,107 @@ export function problemText(status, body) {
   if (typeof body === "string" && body.trim()) return body.trim().slice(0, 300);
   return `The server answered ${status}`;
 }
+
+/** Metres between two points on the sphere. */
+export function distanceMeters(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** The points of a sensor's readings that carry a location, oldest first. */
+export function trackOf(readings) {
+  return readings
+    .map((reading) => toPoint(reading))
+    .filter(Boolean)
+    .sort((a, b) => a.t - b.t);
+}
+
+/** What the data explorer can chart. `value` reads the number from one reading; `speed` is
+ * derived from two fixes in a row and has no `value`. */
+export const METRICS = {
+  temperature: { label: "Temperature", unit: "°C", value: (r) => r.temperature },
+  altitude: { label: "Altitude", unit: "m", value: (r) => r.altitude },
+  speed: { label: "Speed", unit: "km/h" },
+  "accelero.x": { label: "Acceleration x", unit: "", value: (r) => r.accelero && r.accelero.x },
+  "accelero.y": { label: "Acceleration y", unit: "", value: (r) => r.accelero && r.accelero.y },
+  "accelero.z": { label: "Acceleration z", unit: "", value: (r) => r.accelero && r.accelero.z },
+};
+
+/** `[time, value]` pairs of one metric from a sensor's readings, oldest first. Speed is the
+ * straight-line distance between two fixes over the time between them. */
+export function metricSeries(readings, metric) {
+  if (metric === "speed") {
+    const track = trackOf(readings);
+    const series = [];
+    for (let i = 1; i < track.length; i++) {
+      const seconds = (track[i].t - track[i - 1].t) / 1000;
+      if (seconds > 0) series.push([track[i].t, (distanceMeters(track[i - 1], track[i]) / seconds) * 3.6]);
+    }
+    return series;
+  }
+  const read = METRICS[metric].value;
+  return readings
+    .map((reading) => [toTime(reading.timestamp), read(reading)])
+    .filter(([t, value]) => Number.isFinite(t) && typeof value === "number" && Number.isFinite(value))
+    .sort((a, b) => a[0] - b[0]);
+}
+
+/** The mean per bucket of `bucketMs`, stamped at the bucket's start; the series itself when
+ * `bucketMs` is 0. */
+export function bucketSeries(series, bucketMs) {
+  if (!bucketMs) return series;
+  const sums = new Map();
+  for (const [t, value] of series) {
+    const key = Math.floor(t / bucketMs) * bucketMs;
+    const sum = sums.get(key) || [0, 0];
+    sum[0] += value;
+    sum[1] += 1;
+    sums.set(key, sum);
+  }
+  return [...sums.entries()].sort((a, b) => a[0] - b[0]).map(([t, [total, count]]) => [t, total / count]);
+}
+
+const MINUTE = 60000;
+export const BUCKETS = { raw: 0, "15m": 15 * MINUTE, "1h": 60 * MINUTE, "6h": 360 * MINUTE, "1d": 1440 * MINUTE };
+
+/** A bucket that keeps a chart of `spanMs` at a few hundred points: every reading up to two
+ * days, then wider buckets. */
+export function autoBucket(spanMs) {
+  const days = spanMs / (1440 * MINUTE);
+  if (!Number.isFinite(days) || days > 180) return "1d";
+  if (days > 45) return "6h";
+  if (days > 8) return "1h";
+  if (days > 2) return "15m";
+  return "raw";
+}
+
+/** The page and its parameters from a location hash like `#/sensors/A1?range=168`. */
+export function parseHash(hash) {
+  const [path, query = ""] = String(hash || "").replace(/^#\/?/, "").split("?");
+  const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
+  return { page: parts[0] || "", id: parts[1] || "", query: Object.fromEntries(new URLSearchParams(query)) };
+}
+
+/** The hash for a page, an optional id and query values; empty values are left out. */
+export function buildHash(page, id = "", query = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== "" && value != null) params.set(key, value);
+  const text = params.toString();
+  return `#/${page}${id ? `/${encodeURIComponent(id)}` : ""}${text ? `?${text}` : ""}`;
+}
+
+/** "1.2 km" or "340 m". */
+export function formatDistance(metres) {
+  if (!Number.isFinite(metres)) return "";
+  return metres >= 1000 ? `${(metres / 1000).toFixed(metres >= 10000 ? 0 : 1)} km` : `${Math.round(metres)} m`;
+}
+
+/** The length of a track in metres. */
+export function trackLength(track) {
+  let total = 0;
+  for (let i = 1; i < track.length; i++) total += distanceMeters(track[i - 1], track[i]);
+  return total;
+}

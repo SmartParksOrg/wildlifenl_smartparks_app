@@ -5,27 +5,45 @@ How the app is built and why. Read [CONVENTIONS.md](CONVENTIONS.md) first.
 ## Principles
 
 - **No build step.** GitHub Pages serves the repository as it is. There is no framework, no bundler and no `node_modules`. The JavaScript is standard ES modules that the browser loads directly.
-- **One dependency.** MapLibre GL JS draws the maps. It comes from a CDN at a pinned version with an integrity hash. Everything else is the web platform.
+- **Two libraries.** MapLibre GL JS draws the maps and Apache ECharts the charts, the same two as in Protect. Both come from a CDN at a pinned version with an integrity hash. Everything else is the web platform.
 - **The look of Protect.** The colour tokens in `assets/app.css` are the same as in `services/frontend/src/index.css` of Smart Parks Protect, and the components (card, button variants, callout, sidebar, sign-in card over a photograph) follow its shadcn/ui components. Rules use the tokens, never a hex value.
 - **Nothing leaves the browser except API calls.** No analytics, no backend, no cookies.
 
 ## Files
 
 ```
-index.html            The whole page: sign-in and the three views
-VERSION               The version, shown on the Account page
-assets/app.css        Design tokens and all styling
-assets/img/           Logo, favicon and sign-in photographs (from Smart Parks Protect)
-assets/js/theme.js    Sets the theme before the first paint
-assets/js/lib.js      Pure functions: times, flattening, CSV. No DOM, no network
-assets/js/api.js      WildlifeNlClient
-assets/js/map.js      MapView, a small wrapper around MapLibre
-assets/js/app.js      The user interface
-tests/lib.test.js     Unit tests for lib.js
-.nojekyll             Tells GitHub Pages to serve the files untouched
+index.html               The whole page: sign-in and a section per page
+VERSION                  The version, shown on the Account page
+assets/app.css           Design tokens and all styling
+assets/img/              Logo, favicon and sign-in photographs (from Smart Parks Protect)
+assets/js/theme.js       Sets the theme before the first paint
+assets/js/lib.js         Pure functions: times, tracks, metrics, buckets, CSV. No DOM, no network
+assets/js/api.js         WildlifeNlClient
+assets/js/session.js     The signed-in account: token storage, roles, sign out
+assets/js/store.js       The sensors and their readings, fetched once and kept in memory
+assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
+assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
+assets/js/chart.js       LineChart on ECharts, loaded on first use
+assets/js/app.js         Sign-in, navigation and the router
+assets/js/pages/*.js     One module per page: map, sensors, sensor, explore, detections, account
+tests/lib.test.js        Unit tests for lib.js
+.nojekyll                Tells GitHub Pages to serve the files untouched
 ```
 
-Rule of thumb: logic that can be wrong in a subtle way goes in `lib.js` with a test. `app.js` only reads inputs, calls `lib.js` and `api.js`, and draws.
+Rule of thumb: logic that can be wrong in a subtle way goes in `lib.js` with a test. A page module reads inputs, asks `store.js` for data and draws.
+
+## Pages and addresses
+
+The address after `#` chooses the page: `#/map`, `#/sensors`, `#/sensors/{id}`, `#/explore`, `#/detections`, `#/account`. `parseHash` and `buildHash` in `lib.js` read and write it. `app.js` shows the matching section and calls the page module's `show(route)`; on sign out it calls every module's `reset()`.
+
+- `#/map?sensor={id}&track=1` selects a sensor and draws its track; the page then cleans the address.
+- `#/explore?sensors=a,b&metrics=temperature,speed&range=168&bucket=1h` is the whole state of the data explorer, so a link reproduces a view.
+
+## Sensors and readings
+
+`store.js` is the one place that knows which sensors exist. A sensor comes from `GET /borne-sensor-deployment/active/` (herd managers only) or from the IDs the user added, kept in `localStorage` under `wnl-sensors`. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
+
+The API has no "latest reading" call and no time filter: one request returns every reading of a sensor. The pages therefore fetch per sensor, three at a time in the background, and filter by period in the browser. A deployment carries the animal's current location, which places the marker before the readings are in.
 
 ## WildlifeNL API
 
@@ -44,7 +62,7 @@ The roles are also in `SCOPES` in `api.js`; the Account page draws its access ta
 
 Errors are problem documents (`application/problem+json` with `title`, `detail` and sometimes `errors`). `problemText` in `lib.js` turns them into one sentence. A list endpoint answers `null` when there is nothing; `WildlifeNlClient.list` turns that into an empty array.
 
-The readings endpoint has no time filter, so the app fetches all readings of a sensor and filters by period in the browser. The table renders 200 rows at a time to stay fast with large sensors.
+Tables render 200 rows at a time to stay fast with large sensors.
 
 ## Sign-in
 
@@ -63,11 +81,16 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | --- | --- | --- |
 | `wnl-session` | `localStorage` when "Keep me signed in" is on, else `sessionStorage` | API address, token, email, user ID, name, roles |
 | `wnl-theme` | `localStorage` | `light`, `dark` or `system` |
+| `wnl-sensors` | `localStorage` | The sensor IDs the user added by hand |
+| `wnl-map-hidden` | `localStorage` | The sensors hidden on the live map |
+| `wnl-basemap` | `localStorage` | The chosen base map |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
 
 ## Map
 
-`MapView` in `map.js` draws coloured points, an optional track and a popup. The basemaps are OpenFreeMap's `positron` (light) and `fiord` (dark), the same source Protect uses, without an API key. A map is created the first time its page is visible. On a theme change the style is replaced and the layers are added again in the `style.load` handler.
+`map.js` has two classes on a shared base. `MapView` draws the points of one page with an optional track. `LiveMap` draws a labelled marker per sensor, a coloured line and points per track, and the detections; it tells the page about clicks through callbacks. Both take their data as plain lists and rebuild their GeoJSON sources in `sources()`, so after a style change (`style.load`) the same data is drawn again.
+
+The base maps are OpenFreeMap's `positron`, `liberty`, `bright` and `fiord`, the same as in Protect and without an API key. The choice is stored under `wnl-basemap`; the default follows the theme. Labels use the font `Noto Sans Regular`, the glyphs OpenFreeMap serves. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for the night map.
 
 MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
 
@@ -77,6 +100,14 @@ curl -sL https://unpkg.com/maplibre-gl@VERSION/dist/maplibre-gl.css | openssl dg
 ```
 
 If the script fails to load, the map area says so and the tables keep working.
+
+## Charts
+
+`chart.js` wraps Apache ECharts 6.1.0. The script (about 1 MB) is added to the page the first time a chart is drawn, from unpkg with an integrity hash, so the map and the lists do not pay for it. To update it, change `ECHARTS_URL` and `ECHARTS_HASH`; the hash is made the same way as for MapLibre.
+
+Rules the charts follow: one chart per metric, never two scales in one chart; a line keeps its colour while its sensor stays chosen (`colours` in `pages/explore.js`); a legend only when there is more than one line; the table under the charts holds the same numbers. The series colours are Protect's chart palette (`PALETTE`).
+
+`metricSeries`, `bucketSeries` and `autoBucket` in `lib.js` turn readings into the points of a line. Speed is the straight-line distance between two fixes over the time between them.
 
 ## Content security policy
 
@@ -90,7 +121,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, load readings, load detections, sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track, the sensors list, a sensor page, the data explorer, detections, sign out, reload while signed in.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 
