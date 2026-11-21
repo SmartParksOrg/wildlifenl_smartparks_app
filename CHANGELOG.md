@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.5.1 - 2026-11-21
+
+Every page fits a phone, upright and sideways.
+
 ### Changed
 
 - On a phone the live map shows one panel at a time: picking something closes the layers, and the picked place stays in sight above its panel. Held sideways, the panels stand at the left.
