@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.5.2 - 2026-11-21
+
+The live map on a phone held sideways.
+
 ### Fixed
 
 - The live map on a phone held sideways: the tools at the top right ran into the zoom buttons, and the layers together with the panel of a picked animal were taller than the screen. On a low screen the map now shows one panel at a time, a panel scrolls within the room it has, and the two zoom buttons make way (zoom with two fingers).
