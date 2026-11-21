@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.5.0 - 2026-11-21
+
+The core of the other WildlifeNL apps in this one: the admin tool, the research portal, the report app and the animal radar.
+
 ### Added
 
 - The app can change things in WildlifeNL, where the account may: add an animal and put a sensor on it, draw a zone and choose its species, make a report, add, change, end and delete an experiment with its questionnaires, questions, answer options and messages, add and change species, living labs and report types, add a person and give or take away a role, and change the own profile. A button stands on the page the change belongs to.

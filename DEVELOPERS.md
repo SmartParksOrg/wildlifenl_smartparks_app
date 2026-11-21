@@ -179,15 +179,31 @@ Measured against the test server with 13 sensors: the live map shows its markers
 
 The app follows the OpenAPI document the API serves at its root (`/openapi.json`), version `20260826` on the live server (`live-api-wildlifenl.uu.nl`) and `20261116` on the test server (`test-api-wildlifenl.uu.nl`); the calls this app uses are the same on both. The source is open: [UtrechtUniversity/wildlifenl](https://github.com/UtrechtUniversity/wildlifenl). The API sends `Access-Control-Allow-Origin: *`, so a static page can call it.
 
+The calls that read, by where the app uses them. The calls that change something are in `ACTIONS` in `writes.js`, with their roles read from the server; the Account page lists them all.
+
 | Call | Used for | Roles |
 | --- | --- | --- |
-| `POST /auth/` | Ask for a login code by email (`displayNameApp`, `email`) | none |
-| `PUT /auth/` | Trade the code for a credential (`token`, `scopes`, `email`, `userID`) | none |
+| `POST /auth/`, `PUT /auth/` | Ask for a login code by email, then trade it for a credential (`token`, `scopes`, `email`, `userID`) | none |
 | `GET /profile/me/` | Check the token, read the name and the roles | any account |
-| `GET /borne-sensor-deployment/active/` | Suggestions for the sensor ID | `herd-manager` |
-| `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `land-user`, `nature-area-manager`, `wildlife-manager`, `herd-manager` |
-| `GET /detections/` | Detections by `start`, `end`, `latitude`, `longitude`, `radius` (metres, at most 10000) | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /openapi.json` | The Database page, and the roles and fields of every call that changes something | none |
+| `GET /borne-sensor-deployment/active/` | The animals and their sensors | `herd-manager` |
+| `GET /animals/` | The animals in a searched area, by `start`, `end`, `latitude`, `longitude`, `radius` | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /animal/{id}` | The animal on its page | `herd-manager` |
+| `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `land-user`, `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /detections/`, `GET /interactions/` | Detections and reports in a searched area, with the same query | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /visitation/` | Where people were in a living lab, per cell | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /interactions/me/`, `/responses/me/`, `/conveyances/me/`, `/contacts/me/`, `/tracking-readings/me/`, `/alarms/me/` | What is the account's own: the Mine section and the own layers of the map | any account |
+| `GET /zones/me/` | The zones the account drew | `land-user`, `wildlife-manager` |
+| `GET /interaction/{id}` | A report on its page | `wildlife-manager`, `researcher` |
+| `GET /experiments/`, `/experiments/me/`, `/experiment/{id}` | Experiments | `researcher` |
+| `GET /questionnaires/`, `/messages/`, `/responses/`, `/conveyances/`, `/interactions/`, `/contacts/`, `/tracking-readings/` + `experiment/{id}`, `GET /responses/questionnaire/{id}` | What hangs under an experiment. The last three per experiment exist on the test server only | `researcher` |
+| `GET /questionnaire/{id}`, `/question/{id}`, `/answer/{id}`, `/message/{id}` | One record of each; a questionnaire comes with its questions and answer options | any account |
+| `GET /alarms/` | All alarms | `administrator`, `researcher` |
+| `GET /profiles/`, `GET /profile/{id}` | The accounts | `administrator` |
+| `GET /user/{id}` | The name of a person | any account |
+| `GET /species/`, `/species/{id}`, `/livinglabs/`, `/livinglab/{id}`, `/interactionTypes/`, `/roles/` | What every account may read | any account |
+
+Not used on purpose: `POST /borne-sensor-reading/` and `POST /detection/` (machines send those), `POST` and `PUT /contact/` (the phone apps, over Bluetooth) and `DELETE /profile/me/`.
 
 The roles for reading are also in `SCOPES` in `api.js`; the Account page draws its first table from it. When the API changes, update `SCOPES`, this table and the README together. The roles for changing are not in the code: they are read from the server, see "Changing things".
 
@@ -238,6 +254,17 @@ The live map page (`pages/map.js`) places its controls as Protect does: the Laye
 
 A track draws every fix in its line but at most 2000 dots, and the popup of a point is made on the click, so a track of tens of thousands of points appears at once. A track is known by its slot in `TRACK_COLORS` (Protect's track colours), with a lighter set of the same hues for a dark ground.
 
+### Updating MapLibre
+
+MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
+
+```bash
+curl -sL https://unpkg.com/maplibre-gl@VERSION/dist/maplibre-gl.js | openssl dgst -sha384 -binary | openssl base64 -A
+curl -sL https://unpkg.com/maplibre-gl@VERSION/dist/maplibre-gl.css | openssl dgst -sha384 -binary | openssl base64 -A
+```
+
+If the script fails to load, the map area says so and the tables keep working.
+
 ## Detections
 
 `GET /detections/` needs a centre and a radius of at most 10 km, and the API has no list of detectors. `detections.js` is the one module that deals with that; the live map and the Detections page both read from it and hear about changes through `onDetections`.
@@ -260,15 +287,6 @@ The WildlifeNL connector of Protect (`shared/shared/integrations/connectors/wild
 
 Note for the Protect side: the test server (API `20261116`) wants the species as `speciesName`, the exact Latin name, where the live server (API `20260826`) still wants `speciesID`. The connector sends `speciesID`, so the test server refuses its detections until the connector follows.
 
-MapLibre is pinned at 5.24.1, the last line that ships a single script that works from a CDN. Version 6 is modules only and needs its worker file served from the same origin, which would mean vendoring it or adding a build step. To update the pin, change the version in both tags in `index.html` and replace the integrity hashes:
-
-```bash
-curl -sL https://unpkg.com/maplibre-gl@VERSION/dist/maplibre-gl.js | openssl dgst -sha384 -binary | openssl base64 -A
-curl -sL https://unpkg.com/maplibre-gl@VERSION/dist/maplibre-gl.css | openssl dgst -sha384 -binary | openssl base64 -A
-```
-
-If the script fails to load, the map area says so and the tables keep working.
-
 ## Charts
 
 `chart.js` wraps Apache ECharts 6.1.0. The script (about 1 MB) is added to the page the first time a chart is drawn, from unpkg with an integrity hash, so the map and the lists do not pay for it. To update it, change `ECHARTS_URL` and `ECHARTS_HASH`; the hash is made the same way as for MapLibre.
@@ -289,7 +307,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, the two tables on the Account page, a change on the test server (a report, a zone drawn on the map, the own profile), sign out, reload while signed in.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, the two tables on the Account page, a change on the test server (a report, a zone drawn on the map, the own profile), sign out, reload while signed in. Also: the sections of the navigation for the roles of the account, My reports, a report inside a running experiment with its questions (stop halfway and go on from the page of the report), the location switch on the Account page, and as a researcher a questionnaire with a jump, a copy of it and a delete with what hangs under it. Give a test report a moment of more than an hour ago, so nobody gets an alarm for it.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 
