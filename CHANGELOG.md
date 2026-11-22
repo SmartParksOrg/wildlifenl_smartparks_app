@@ -4,6 +4,8 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.6.0 - 2026-11-22
+
 Follows WildlifeNL API 20261122, now on the live and the test server.
 
 ### Changed
