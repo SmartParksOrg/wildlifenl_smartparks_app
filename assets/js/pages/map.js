@@ -12,7 +12,7 @@ import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, per
 import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { onSharing, sharing } from "../sharing.js";
-import { canListSensors, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
+import { canListSensors, canReadReadings, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 import { choices, drawTab, isCustomised, isShown, offerTabs, openTab, resetChoices, show as showRow } from "./map-layers.js";
 
@@ -131,7 +131,7 @@ function eventList() {
     const species = animal.species ? animal.species.commonName || animal.species.name : "";
     events.push({
       id: `n:${animal.ID}`,
-      name: animal.name || species || "Animal",
+      name: animal.identifier || species || "Animal",
       sub: [species, formatMoment(toTime(animal.locationTimestamp))].filter(Boolean).join(" · "),
       group: "Animals near you",
       time: toTime(animal.locationTimestamp),
@@ -160,7 +160,7 @@ function eventList() {
     const animal = contact.borneSensorDeployment && contact.borneSensorDeployment.animal;
     events.push({
       id: `c:${contact.ID}`,
-      name: [contact.user && contact.user.name, animal && animal.name].filter(Boolean).join(" and ") || "Contact",
+      name: [contact.user && contact.user.name, animal && animal.identifier].filter(Boolean).join(" and ") || "Contact",
       sub: formatMoment(toTime(contact.start)),
       group: "Contacts",
       time: toTime(contact.start),
@@ -259,7 +259,7 @@ function drawPanel() {
     drawAreas();
   };
   // a tab without rows is left out, unless the person can fill it from the panel
-  const fillable = { animals: searchesAnimals(), sensors: true, detectors: hasScope(SCOPES.detections), events: hasScope(SCOPES.reports) };
+  const fillable = { animals: searchesAnimals(), sensors: canReadReadings(), detectors: hasScope(SCOPES.detections), events: hasScope(SCOPES.reports) };
   const empty = [];
   const tab = (key, items, options) => {
     if (!items.length && !fillable[key]) empty.push(key);
@@ -267,6 +267,8 @@ function drawPanel() {
   };
   const locate = (kind, id, disabled = false) => rowButton("locate", "Show on map", () => select(kind, id, true), { disabled });
   const trackButton = (key) => {
+    // the track of an animal is its sensor's readings; that of a person is always there
+    if (!key.startsWith("p:") && !canReadReadings()) return null;
     const tracked = tracks.has(key);
     return rowButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(key), { active: tracked, colour: tracked ? trackColor(tracks.get(key)) : "" });
   };
@@ -285,16 +287,17 @@ function drawPanel() {
         selected: isSelected("animals", sensor.id),
         actions: [trackButton(sensor.id), locate("animals", sensor.id, !sensor.place)],
       })),
-    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : searchesAnimals() ? "No animals found yet. Search this view below." : "The animals need the herd-manager role. A sensor you added by its ID is under Sensors." },
+    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : searchesAnimals() ? "No animals found yet. Search this view below." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.` },
   );
   // every sensor, to look at the data from the side of the sensor. One that is on an animal
-  // is not drawn until it is ticked: its animal is on the map already.
+  // is not drawn until it is ticked: its animal is on the map already. Without readings a
+  // sensor is no more than its animal, so the tab is left out.
   tab(
     "sensors",
-    sensors.map((sensor) => ({
+    (canReadReadings() ? sensors : []).map((sensor) => ({
       id: sensor.id,
       name: sensor.id,
-      sub: [sensor.animal ? `on ${sensor.animal.name}` : "", sensor.place ? "" : "no position yet"].filter(Boolean).join(" · "),
+      sub: [sensor.animal ? `on ${sensor.animal.identifier}` : "", sensor.place ? "" : "no position yet"].filter(Boolean).join(" · "),
       group: sensor.animal ? "On an animal" : "Without an animal",
       time: sensor.place ? sensor.place.t : 0,
       icon: "sensor",
@@ -387,23 +390,26 @@ function sensorPanel(sensor, asSensor) {
   const inPeriod = trackPoints(sensor.id);
   const animal = sensor.animal;
   const led = asSensor || !animal;
+  const readable = canReadReadings();
+  // without readings, the moment WildlifeNL last placed the animal
+  const placed = sensor.place && Number.isFinite(sensor.place.t) ? sensor.place.t : NaN;
   return [
-    led ? panelHead("sensor", sensor.id, animal ? `sensor on ${animal.name}` : "sensor without an animal") : panelHead(iconOf(sensor), sensor.name, sensor.species || "animal"),
+    led ? panelHead("sensor", sensor.id, animal ? `sensor on ${animal.identifier}` : "sensor without an animal") : panelHead(iconOf(sensor), sensor.name, sensor.species || "animal"),
     factList([
-      ["Last seen", loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
-      ["Position", last ? formatMoment(last.t) : loaded ? (loaded.complete ? "none yet" : "not recently") : ""],
+      ["Last seen", !readable ? (Number.isFinite(placed) ? ago(placed) : "unknown") : loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
+      ["Position", !readable ? (Number.isFinite(placed) ? formatMoment(placed) : "") : last ? formatMoment(last.t) : loaded ? (loaded.complete ? "none yet" : "not recently") : ""],
       ["Coordinates", sensor.place ? `${sensor.place.lat.toFixed(5)}, ${sensor.place.lng.toFixed(5)}` : ""],
       ["Temperature", temperature == null ? "" : `${temperature} °C`],
-      ["Animal", led && animal ? link(buildHash("animals", animal.ID), animal.name) : ""],
+      ["Animal", led && animal ? link(buildHash("animals", animal.ID), animal.identifier) : ""],
       ["Species", animal && animal.species ? link(recordHash("species", animal.species.ID), sensor.species) : ""],
       ["Sensor", led ? "" : link(buildHash("sensors", sensor.id), sensor.id)],
       ["Track", all && tracked ? `${inPeriod.length.toLocaleString()} of ${plural(all.track.length, "point")}, ${formatDistance(trackLength(inPeriod))}` : ""],
     ]),
     el("div", { class: "row" }, [
-      iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { on: tracked }),
+      readable ? iconButton("route", tracked ? "Hide the track" : "Show the track", () => toggleTrack(sensor.id), { on: tracked }) : null,
       iconButton("locate", "Centre the map here", () => sensor.place && goTo(sensor.place), { disabled: !sensor.place }),
       led ? iconButton("sensor", "Open the sensor", null, { href: buildHash("sensors", sensor.id) }) : iconButton("animal", "Open the animal", null, { href: buildHash("animals", animal.ID) }),
-      iconButton("chart", "Open in the data explorer", null, { href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }),
+      readable ? iconButton("chart", "Open in the data explorer", null, { href: buildHash("explore", "", { sensors: sensor.id, metrics: "speed" }) }) : null,
     ]),
   ];
 }
@@ -440,7 +446,7 @@ function personPanel(id) {
 function nearPanel(animal, place) {
   const known = sensorByAnimal(animal.ID);
   return [
-    panelHead(reportIcon(animal), animal.name || "Animal", "animal near you"),
+    panelHead(reportIcon(animal), animal.identifier || "Animal", "animal near you"),
     factList([
       ["Species", animal.species ? animal.species.commonName || animal.species.name : ""],
       ["Last position", formatMoment(toTime(animal.locationTimestamp))],
@@ -460,7 +466,7 @@ function contactPanel(contact, place) {
     panelHead("person", "Contact", "a person near an animal"),
     factList([
       ["Person", contact.user ? link(recordHash("people", contact.user.ID), contact.user.name) : ""],
-      ["Animal", animal ? link(buildHash("animals", animal.ID), animal.name) : ""],
+      ["Animal", animal ? link(buildHash("animals", animal.ID), animal.identifier) : ""],
       ["Sensor", deployment.sensorID ? link(buildHash("sensors", deployment.sensorID), deployment.sensorID) : ""],
       ["Began", `${formatMoment(start)} (${ago(start)})`],
       ["Lasted", Number.isFinite(minutes) ? plural(minutes, "minute") : "still going on"],
@@ -477,7 +483,7 @@ function alarmPanel(alarm, place) {
     factList([
       ["When", `${formatMoment(toTime(alarm.timestamp))} (${ago(toTime(alarm.timestamp))})`],
       ["Zone", alarm.zone ? link(recordHash("zones", alarm.zone.ID), alarm.zone.name || "Zone") : ""],
-      ["Animal", alarm.animal ? link(buildHash("animals", alarm.animal.ID), alarm.animal.name) : ""],
+      ["Animal", alarm.animal ? link(buildHash("animals", alarm.animal.ID), alarm.animal.identifier) : ""],
       ["Detection", alarm.detection ? link(buildHash("detections", "", { detector: alarm.detection.deploymentID }), `at ${alarm.detection.deploymentID}`) : ""],
       ["Report", alarm.interaction ? link(recordHash("reports", alarm.interaction.ID), "open the report") : ""],
       ["Messages", (alarm.conveyances || []).length ? `${plural(alarm.conveyances.length, "message")} sent` : ""],
@@ -706,7 +712,7 @@ async function select(kind, id, fly = false) {
     const place = placeOf(kind, id);
     if (place) goTo(place);
   }
-  if (kind !== "animals" && kind !== "sensors") return;
+  if ((kind !== "animals" && kind !== "sensors") || !canReadReadings()) return;
   try {
     await loadRecent(id);
   } catch (error) {
@@ -753,6 +759,7 @@ async function toggleVisits(area) {
 
 /** Sensors without a place get their newest readings in the background, three at a time. */
 async function locateTheRest() {
+  if (!canReadReadings()) return;
   const queue = sensors.filter((sensor) => !sensor.place && !recentReadings(sensor.id));
   const worker = async () => {
     for (let sensor = queue.shift(); sensor; sensor = queue.shift()) {
@@ -928,7 +935,7 @@ export async function show({ query }) {
   const wanted = query.animal ? sensorByAnimal(query.animal) : query.sensor ? sensorById(query.sensor) : null;
   if (wanted) {
     await select(query.animal ? "animals" : "sensors", wanted.id, true);
-    if (query.track) await toggleTrack(wanted.id, true);
+    if (query.track && canReadReadings()) await toggleTrack(wanted.id, true);
   }
   if (query.area) {
     await areasLoaded;

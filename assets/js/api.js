@@ -54,12 +54,12 @@ async function request(url, { method = "GET", headers = {}, body } = {}) {
   return text ? data : null;
 }
 
-/** Roles that may call each read endpoint, from the API's OpenAPI document (version 20260826).
+/** Roles that may call each read endpoint, from the API's OpenAPI document (version 20261122).
  * An empty list means every signed-in account. The navigation in index.html names these keys
  * to say who sees an entry. */
 export const SCOPES = {
   deployments: ["herd-manager"],
-  readings: ["land-user", "nature-area-manager", "wildlife-manager", "herd-manager"],
+  readings: ["herd-manager"],
   detections: ["nature-area-manager", "wildlife-manager", "herd-manager"],
   reports: ["nature-area-manager", "wildlife-manager", "herd-manager"],
   visits: ["nature-area-manager", "wildlife-manager", "herd-manager"],

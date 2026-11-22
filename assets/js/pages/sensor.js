@@ -9,7 +9,7 @@ import { METRICS, ago, autoBucket, BUCKETS, bucketSeries, buildHash, columnsOf, 
 import { MapView } from "../map.js";
 import { recordHash } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
-import { addSensor, loadReadings, loadSensors, removeSensor, sensorByAnimal, sensorById } from "../store.js";
+import { addSensor, canReadReadings, loadReadings, loadSensors, removeSensor, sensorByAnimal, sensorById } from "../store.js";
 import { $, DataTable, busy, el, facts, formatMoment, note, plural } from "../ui.js";
 import { drawActions } from "../writes.js";
 
@@ -41,13 +41,18 @@ function latestValue(readings, read) {
 
 function drawHeader(sensor) {
   const animal = sensor && sensor.animal;
-  $("sensorTitle").textContent = asAnimal && animal ? animal.name : id;
-  $("sensorSubtitle").textContent = asAnimal && animal ? [sensor.species, `sensor ${id}`].filter(Boolean).join(", ") : animal ? `Sensor on ${animal.name}` : "Sensor without an animal";
-  $("sensorOnMap").href = buildHash("map", "", animal ? { animal: animal.ID, track: 1 } : { sensor: id, track: 1 });
+  $("sensorTitle").textContent = asAnimal && animal ? animal.identifier : id;
+  $("sensorSubtitle").textContent = asAnimal && animal ? [sensor.species, `sensor ${id}`].filter(Boolean).join(", ") : animal ? `Sensor on ${animal.identifier}` : "Sensor without an animal";
+  const track = canReadReadings() ? { track: 1 } : {};
+  $("sensorOnMap").href = buildHash("map", "", animal ? { animal: animal.ID, ...track } : { sensor: id, ...track });
   $("sensorExplore").href = buildHash("explore", "", { sensors: id, metrics: "speed", range: $("sensorPeriod").value });
+  // without readings there is no period, no chart and no sensor side to show
+  const readable = canReadReadings();
+  for (const target of ["sensorPeriod", "sensorExplore"]) $(target).hidden = !readable;
+  $("sensorTable").closest(".card").hidden = !readable;
   // the way to the other side: from the animal to its sensor and back
   const other = $("sensorOther");
-  other.hidden = !animal;
+  other.hidden = !animal || !readable;
   if (animal) {
     other.href = asAnimal ? buildHash("sensors", id) : buildHash("animals", animal.ID);
     other.textContent = asAnimal ? "Open the sensor" : "Open the animal";
@@ -90,17 +95,43 @@ function drawFacts(sensor, readings, track) {
     ["Acceleration", value(accelero, accelero && ["x", "y", "z"].map((axis) => `${axis} ${Number(accelero.accelero[axis]).toFixed(2)}`).join(", "))],
   ]);
 
+  drawAnimal(sensor);
+}
+
+function drawAnimal(sensor) {
   const animal = sensor && sensor.animal;
   facts(
     $("sensorAnimal"),
     animal
       ? [
-          ["Name", asAnimal ? animal.name : el("a", { href: buildHash("animals", animal.ID), text: animal.name })],
+          ["Identifier", asAnimal ? animal.identifier : el("a", { href: buildHash("animals", animal.ID), text: animal.identifier })],
           ["Species", animal.species ? el("a", { href: recordHash("species", animal.species.ID), text: [animal.species.commonName, animal.species.name && `(${animal.species.name})`].filter(Boolean).join(" ") }) : ""],
           ["Animal ID", animal.ID],
         ]
       : [["Deployment", "WildlifeNL links readings to an animal once a herd manager registers this sensor ID as a deployment. Readings are kept until then."]],
   );
+}
+
+/** For an account that may not read readings: the last position WildlifeNL keeps of the
+ * animal, from the search that found it. */
+function drawPlaced(sensor) {
+  const place = sensor && sensor.place;
+  const t = place ? place.t : NaN;
+  facts($("sensorFacts"), [
+    ["Sensor ID", id],
+    ["Source", sensor && sensor.found ? "Found on the map" : "Active deployment"],
+    ["Deployed since", sensor && sensor.start ? formatMoment(toTime(sensor.start)) : ""],
+  ]);
+  facts($("sensorLatest"), [
+    ["Last seen", Number.isFinite(t) ? ago(t) : "unknown"],
+    ["Position", place ? `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}` : "none known"],
+    ["Position time", Number.isFinite(t) ? formatMoment(t) : ""],
+  ]);
+  drawAnimal(sensor);
+  $("sensorTrackText").textContent = place ? "Last known position" : "No position known";
+  map.setTrack(false);
+  map.setPoints(place ? [place] : [], { describe: (p) => ["Last known position", [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, Number.isFinite(p.t) ? formatMoment(p.t) : ""]] });
+  note($("sensorNote"), `The track, charts and readings need the ${SCOPES.readings.join(" or ")} role. This is where WildlifeNL last placed the animal; search the area on the live map again for a newer position.`);
 }
 
 function drawPeriod(readings, track) {
@@ -146,6 +177,7 @@ async function load(force = false) {
   note($("sensorNote"), "");
   try {
     drawHeader(sensorById(mine));
+    if (!canReadReadings()) return drawPlaced(sensorById(mine));
     const { readings, track } = await loadReadings(mine, force);
     if (mine !== id) return;
     const sensor = sensorById(mine);
@@ -195,10 +227,10 @@ async function showLoneAnimal(animalId) {
   if (!hasScope(SCOPES.animal)) return;
   try {
     const animal = await account.api.call("GET", `/animal/${encodeURIComponent(animalId)}`);
-    $("sensorTitle").textContent = animal.name;
+    $("sensorTitle").textContent = animal.identifier;
     $("sensorSubtitle").textContent = animal.species ? animal.species.commonName || animal.species.name : "";
     facts($("sensorAnimal"), [
-      ["Name", animal.name],
+      ["Identifier", animal.identifier],
       ["Species", animal.species ? el("a", { href: recordHash("species", animal.species.ID), text: animal.species.commonName || animal.species.name }) : ""],
       ["Animal ID", animal.ID],
     ]);

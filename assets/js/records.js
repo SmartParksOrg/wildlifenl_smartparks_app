@@ -206,7 +206,7 @@ export const TYPES = {
     needs: SCOPES.research,
     ownOnly: true,
     columns: ["start", "end", "user", "borneSensorDeployment", "startLocation", "conveyances"],
-    title: (record) => [record.user && record.user.name, record.borneSensorDeployment && record.borneSensorDeployment.animal && record.borneSensorDeployment.animal.name].filter(Boolean).join(" and ") || "Contact",
+    title: (record) => [record.user && record.user.name, record.borneSensorDeployment && record.borneSensorDeployment.animal && record.borneSensorDeployment.animal.identifier].filter(Boolean).join(" and ") || "Contact",
   },
   tracking: {
     table: "TrackingReading",
@@ -314,7 +314,7 @@ export function linkOf(field, value) {
   if (field === "deploymentID" && typeof value === "string") return { href: buildHash("detections", "", { detector: value }), text: value };
   if (field === "detection" && idOf(value)) return { href: buildHash("detections", "", { detector: value.deploymentID }), text: `Detection at ${value.deploymentID || "a detector"}` };
   if (field === "borneSensorDeployment" && value.sensorID) return { href: buildHash("sensors", value.sensorID), text: value.sensorID };
-  if ((field === "animal" || field === "animals") && idOf(value)) return { href: buildHash("animals", idOf(value)), text: value.name || "Animal" };
+  if ((field === "animal" || field === "animals") && idOf(value)) return { href: buildHash("animals", idOf(value)), text: value.identifier || "Animal" };
   const type = FIELD_TYPES[field];
   if (!type || typeof value !== "object" || !idOf(value)) return null;
   return { href: recordHash(type, idOf(value)), text: titleOf(type, value) };

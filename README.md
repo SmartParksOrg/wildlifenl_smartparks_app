@@ -13,7 +13,7 @@ The pages follow the structure of Smart Parks Protect. An animal is what people 
 | Page | What you see |
 | --- | --- |
 | Live map | The animals at their last position, with tracks, and as further layers the sensors, people, detectors, events (reports, contacts and alarms), living labs and zones |
-| Animals | Every animal with a sensor: species, last seen, last position. A page per animal with its track, charts and readings |
+| Animals | Every animal with a sensor: identifier, species, last seen, last position. A page per animal with its track, charts and readings |
 | Sensors | The sensors behind the animals, and where a sensor is added by its ID. A page per sensor with the same data from the technical side |
 | Detections | What camera traps and other detectors saw, as a list |
 | People | The people in the data you may read, each with where the recreation app recorded them, their contacts with animals, the messages they got and the reports they made |
@@ -52,7 +52,8 @@ A list that exists for everyone and for yourself, such as Reports and My reports
 
 | To see | Role |
 | --- | --- |
-| The animals and their sensors | `herd-manager` sees them all; `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map. The readings of a sensor also `land-user` |
+| The animals and their sensors | `herd-manager` sees them all; `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map |
+| The readings of a sensor: the track, charts and measurements of an animal | `herd-manager` |
 | Detections, reports from others, visits of a living lab | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Zones | `land-user` or `wildlife-manager` |
 | Experiments and everything under them | `researcher` |
@@ -61,7 +62,7 @@ A list that exists for everyone and for yourself, such as Reports and My reports
 | The accounts | `administrator` |
 | Species, living labs, report types, roles | Any account |
 
-An account without `herd-manager` can still add a sensor by its ID on the Sensors page; added sensors are remembered in the browser. For a Protect device the ID is what its integration sends: by default the device's primary identity (DevEUI, IMEI or serial), see `sensor_id_source` in the integration's settings. WildlifeNL keeps readings even before a herd manager has registered the sensor on an animal.
+A herd manager can also add a sensor by its ID on the Sensors page, for one that is not on an animal yet; added sensors are remembered in the browser. For a Protect device the ID is what its integration sends: by default the device's primary identity (DevEUI, IMEI or serial), see `sensor_id_source` in the integration's settings. WildlifeNL keeps readings even before a herd manager has registered the sensor on an animal.
 
 ### What your account can change
 
@@ -116,7 +117,7 @@ Where a record names another one, the app links to it: an animal to its species 
 The map is laid out like the live map of Protect.
 
 - **Layers** (top left) opens a panel with a tab per kind: Animals, Sensors, People, Detectors, Events and Areas. Each tab has a search, a choice to group the rows or not, sorting by name or by last update, groups that fold, a tick per row and per group, and a line to show, hide, unfold or fold everything. Reset puts it all back.
-- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it. An area manager or wildlife manager, who may not list the herd's sensors, finds the animals with **Search this view**: every animal with a sensor whose last position is in the view and under 48 hours old. Found animals are remembered in the browser and are animals like any other from then on, with a page, a track and charts.
+- **Animals** are grouped per species. The route button draws the track of an animal and the target button goes to it. An area manager or wildlife manager, who may not list the herd's sensors, finds the animals with **Search this view**: every animal with a sensor whose last position is in the view and under 48 hours old. Found animals are remembered in the browser and have a page with the last position WildlifeNL keeps of them. Their track and charts need `herd-manager`, the only role that may read the readings of a sensor.
 - **Sensors** lists every sensor, to look at the data from the side of the sensor. A sensor on an animal is drawn as a sensor once you tick or pick it; until then its animal stands for it.
 - **People** are where the recreation app last recorded them, each with a track like an animal.
 - **Events** are the reports from people, the contacts between a person and an animal, and the alarms, grouped per kind.

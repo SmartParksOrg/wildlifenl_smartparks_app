@@ -4,9 +4,12 @@
 // from the animals a search of the live map found (for the managers who may not list the
 // deployments), or from the IDs the user added by hand. The last two are remembered in this
 // browser.
+//
+// Only a herd manager may read the readings of a sensor. Every other account knows an animal
+// by the last position WildlifeNL keeps of it, and its sensor by nothing more.
 
-import { SCOPES } from "./api.js";
-import { sensorOfAnimal, trackOf } from "./lib.js";
+import { ApiError, SCOPES } from "./api.js";
+import { sensorOfAnimal, toTime, trackOf } from "./lib.js";
 import { account, hasScope } from "./session.js";
 
 const ADDED_KEY = "wnl-sensors";
@@ -47,7 +50,9 @@ function foundKey() {
 function foundDeployments() {
   try {
     const list = JSON.parse(localStorage.getItem(foundKey()) || "[]");
-    return Array.isArray(list) ? list.filter((item) => item && typeof item.sensorID === "string" && item.animal) : [];
+    if (!Array.isArray(list)) return [];
+    // before API 20261122 an animal had a `name` where it now has an `identifier`
+    return list.filter((item) => item && typeof item.sensorID === "string" && item.animal).map((item) => (item.animal.identifier || !item.animal.name ? item : { ...item, animal: { ...item.animal, identifier: item.animal.name } }));
   } catch {
     return [];
   }
@@ -60,14 +65,15 @@ function fromDeployment(deployment) {
   const located = location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude) && (location.latitude !== 0 || location.longitude !== 0);
   return {
     id: deployment.sensorID,
-    name: (animal && animal.name) || deployment.sensorID,
+    name: (animal && animal.identifier) || deployment.sensorID,
     animal,
     species,
     start: deployment.start || "",
     added: false,
     found: false,
-    // the animal's current location, until the sensor's own readings are loaded
-    place: located ? { lat: location.latitude, lng: location.longitude, t: NaN } : null,
+    // the animal's current location, until the sensor's own readings are loaded. The animals
+    // a search found say when that was; the active deployments do not.
+    place: located ? { lat: location.latitude, lng: location.longitude, t: toTime(animal.locationTimestamp) } : null,
   };
 }
 
@@ -87,7 +93,8 @@ async function fetchSensors() {
   for (const deployment of foundDeployments()) {
     if (!byId.has(deployment.sensorID)) byId.set(deployment.sensorID, { ...fromDeployment(deployment), found: true });
   }
-  for (const id of addedIds()) {
+  // a sensor added by its ID shows nothing but its readings, so only for who may read them
+  for (const id of canReadReadings() ? addedIds() : []) {
     if (byId.has(id)) byId.get(id).added = true;
     else byId.set(id, { id, name: id, animal: null, species: "", start: "", added: true, found: false, place: null });
   }
@@ -122,6 +129,16 @@ export function listError() {
 
 export function canListSensors() {
   return hasScope(SCOPES.deployments);
+}
+
+/** Whether the account may read the readings of a sensor: its track, charts and measurements. */
+export function canReadReadings() {
+  return hasScope(SCOPES.readings);
+}
+
+/** The refusal for an account that may not read readings, before any request is made. */
+function readingsRefused() {
+  return Promise.reject(new ApiError(`The readings of a sensor need the ${SCOPES.readings.join(" or ")} role.`, 403));
 }
 
 export function sensorById(id) {
@@ -175,6 +192,7 @@ export function loadReadings(id, force = false) {
     state.recent.delete(id);
     state.recentLoaded.delete(id);
   }
+  if (!canReadReadings()) return readingsRefused();
   if (!state.readings.has(id)) {
     const promise = account.api
       .readings(id)
@@ -199,6 +217,7 @@ export function loadReadings(id, force = false) {
  * cost megabytes. When that part turns out to be everything, it counts as fully loaded. */
 export function loadRecent(id) {
   if (state.loaded.has(id)) return Promise.resolve({ ...state.loaded.get(id), complete: true });
+  if (!canReadReadings()) return readingsRefused();
   if (!state.recent.has(id)) {
     const promise = account.api
       .recentReadings(id)

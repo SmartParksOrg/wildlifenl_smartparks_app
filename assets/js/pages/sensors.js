@@ -6,7 +6,7 @@ import { SCOPES } from "../api.js";
 import { ago, buildHash, toTime } from "../lib.js";
 import { recordHash } from "../records.js";
 import { explain, hasScope } from "../session.js";
-import { addSensor, canListSensors, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
+import { addSensor, canListSensors, canReadReadings, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
 import { drawActions } from "../writes.js";
 
@@ -20,7 +20,7 @@ const LISTS = {
     columns: ["animal", "species", "last_seen", "last_position", "sensor", "deployed_since"],
     labels: { animal: "Animal", species: "Species", last_seen: "Last seen", last_position: "Last position", sensor: "Sensor", deployed_since: "Sensor since" },
     sortKey: "animal",
-    empty: () => (canListSensors() ? "WildlifeNL has no animals with an active sensor." : hasScope(SCOPES.animalsNear) ? "No animals found yet. Open the live map, go to an area and search it under Layers." : "The animals need the herd-manager role. A sensor you add by its ID is listed under Sensors."),
+    empty: () => (canListSensors() ? "WildlifeNL has no animals with an active sensor." : hasScope(SCOPES.animalsNear) ? "No animals found yet. Open the live map, go to an area and search it under Layers." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.`),
   },
   sensors: {
     table: "sensorsTable",
@@ -39,6 +39,13 @@ let sensors = [];
 let run = 0;
 let current = "";
 
+/** The row of an account that may not read readings: when WildlifeNL last placed the animal. */
+function placedRow(sensor) {
+  const t = sensor.place ? sensor.place.t : NaN;
+  const seen = Number.isFinite(t) ? ago(t) : "unknown";
+  return { last_seen: seen, last_reading: "", last_position: seen, readings: null };
+}
+
 function rowOf(sensor) {
   const loaded = recentReadings(sensor.id);
   const times = loaded ? loaded.readings.map((r) => toTime(r.timestamp)).filter(Number.isFinite) : [];
@@ -46,7 +53,7 @@ function rowOf(sensor) {
   const seen = !loaded ? "loading…" : times.length ? ago(Math.max(...times)) : "none";
   return {
     sensor: sensor.id,
-    animal: sensor.animal ? sensor.animal.name : "",
+    animal: sensor.animal ? sensor.animal.identifier : "",
     animal_id: sensor.animal ? sensor.animal.ID : "",
     species: sensor.species,
     species_id: sensor.animal && sensor.animal.species ? sensor.animal.species.ID : "",
@@ -55,6 +62,7 @@ function rowOf(sensor) {
     last_position: !loaded ? "" : Number.isFinite(last) ? ago(last) : loaded.complete ? "none" : "not recently",
     // the list reads only the newest part of a large sensor, so the total is not known
     readings: !loaded ? null : loaded.complete ? loaded.readings.length : `over ${loaded.readings.length}`,
+    ...(canReadReadings() ? {} : placedRow(sensor)),
     deployed_since: sensor.start ? sensor.start.slice(0, 10) : "",
     source: sensor.found ? "Found on the map" : sensor.animal ? "Deployment" : "Added by hand",
   };
@@ -83,6 +91,7 @@ function draw() {
  * part of each sensor's readings. */
 async function fillReadings() {
   const mine = ++run;
+  if (!canReadReadings()) return;
   const queue = sensors.filter((sensor) => !recentReadings(sensor.id));
   const worker = async () => {
     for (let sensor = queue.shift(); sensor && mine === run; sensor = queue.shift()) {

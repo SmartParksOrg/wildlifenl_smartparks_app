@@ -4,6 +4,17 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+Follows WildlifeNL API 20261122, now on the live and the test server.
+
+### Changed
+
+- An animal is known by its identifier, which WildlifeNL used to call its name. The page of an animal says Identifier.
+- Only a herd manager may read the readings of a sensor now. Other accounts see the animals they found on the live map at the last position WildlifeNL keeps of them, with when that was, and without a track, charts or readings. The Sensors page and the data explorer are for herd managers only.
+
+### Fixed
+
+- Since WildlifeNL changed its API, animals showed their sensor ID in place of their name, and an area manager or wildlife manager got a refusal on the page of an animal and when picking one on the live map.
+
 ## 2.5.3 - 2026-11-22
 
 Sign out on the live map.

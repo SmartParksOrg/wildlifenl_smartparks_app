@@ -150,7 +150,7 @@ export function alarmPlace(alarm) {
 
 /** What caused an alarm, in a few words. */
 export function alarmCause(alarm) {
-  if (alarm.animal) return `${alarm.animal.name || "an animal"} came inside`;
+  if (alarm.animal) return `${alarm.animal.identifier || "an animal"} came inside`;
   if (alarm.detection) return "a detection inside";
   if (alarm.interaction) return "a report inside";
   return "";

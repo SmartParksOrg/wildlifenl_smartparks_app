@@ -162,7 +162,11 @@ To offer another call: add an action to `ACTIONS`. To check by hand, sign in on 
 
 - `GET /borne-sensor-deployment/active/`, which only herd managers may call.
 - The animals a search of the live map found (`addFound`), for an area manager or wildlife manager. `GET /animals/` answers with the animals whose last position is inside a circle and a period, each with its deployments; `sensorOfAnimal` in `lib.js` picks the sensor it carries. They are kept under `wnl-found-animals:{server}:{user}` without their readings.
-- The IDs the user added, kept under `wnl-sensors`.
+- The IDs the user added, kept under `wnl-sensors`. Only for an account that may read readings: an added sensor has nothing else to show.
+
+Only `herd-manager` may read the readings of a sensor (`SCOPES.readings`, since API `20261122`). `canReadReadings` in `store.js` is the one check: without it `loadReadings` and `loadRecent` refuse before a request is made, and the pages leave out tracks, charts, the readings table, the data explorer and the Sensors tab of the live map. An animal then shows the location and `locationTimestamp` that `GET /animals/` returned when the search found it.
+
+An animal is known by its `identifier`, which was `name` before API `20261122`. Found animals stored under the old field are read with it moved over (`foundDeployments`).
 
 From there every page treats them alike. `loadSensors()` and `loadReadings(id)` fetch once and keep the result in memory until `force` or sign out; all pages share that cache, so opening a sensor page after the map costs no request.
 
@@ -177,7 +181,7 @@ Measured against the test server with 13 sensors: the live map shows its markers
 
 ## WildlifeNL API
 
-The app follows the OpenAPI document the API serves at its root (`/openapi.json`), version `20260826` on the live server (`live-api-wildlifenl.uu.nl`) and `20261116` on the test server (`test-api-wildlifenl.uu.nl`); the calls this app uses are the same on both. The source is open: [UtrechtUniversity/wildlifenl](https://github.com/UtrechtUniversity/wildlifenl). The API sends `Access-Control-Allow-Origin: *`, so a static page can call it.
+The app follows the OpenAPI document the API serves at its root (`/openapi.json`), version `20261122` on both the live server (`live-api-wildlifenl.uu.nl`) and the test server (`test-api-wildlifenl.uu.nl`). The source is open: [UtrechtUniversity/wildlifenl](https://github.com/UtrechtUniversity/wildlifenl). The API sends `Access-Control-Allow-Origin: *`, so a static page can call it.
 
 The calls that read, by where the app uses them. The calls that change something are in `ACTIONS` in `writes.js`, with their roles read from the server; the Account page lists them all.
 
@@ -189,7 +193,7 @@ The calls that read, by where the app uses them. The calls that change something
 | `GET /borne-sensor-deployment/active/` | The animals and their sensors | `herd-manager` |
 | `GET /animals/` | The animals in a searched area, by `start`, `end`, `latitude`, `longitude`, `radius` | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /animal/{id}` | The animal on its page | `herd-manager` |
-| `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `land-user`, `nature-area-manager`, `wildlife-manager`, `herd-manager` |
+| `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `herd-manager` |
 | `GET /detections/`, `GET /interactions/` | Detections and reports in a searched area, with the same query | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /visitation/` | Where people were in a living lab, per cell | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /interactions/me/`, `/responses/me/`, `/conveyances/me/`, `/contacts/me/`, `/tracking-readings/me/`, `/alarms/me/` | What is the account's own: the Mine section and the own layers of the map | any account |
@@ -287,7 +291,7 @@ A detection's `uri` comes from another system, so the app only makes it a link w
 
 The WildlifeNL connector of Protect (`shared/shared/integrations/connectors/wildlifenl.py`) posts one detection per species of a `SPECIES_DETECTION` event, which is how AddaxAI Connect pictures arrive: `deploymentID` is the camera's sensor ID, `sensorType` is `visual`, `start` and `end` are the capture time, `uri` is the link back, and `animals` holds one entry with the best confidence as a percentage and the event title as `description`.
 
-Note for the Protect side: the test server (API `20261116`) wants the species as `speciesName`, the exact Latin name, where the live server (API `20260826`) still wants `speciesID`. The connector sends `speciesID`, so the test server refuses its detections until the connector follows.
+Note for the Protect side: since API `20261122` both servers want the species as `speciesName`, the exact Latin name, and no longer take `speciesID`. A connector that sends `speciesID` has its detections refused until it follows.
 
 ## Charts
 
