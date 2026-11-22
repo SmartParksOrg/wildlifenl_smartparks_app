@@ -291,7 +291,7 @@ A detection's `uri` comes from another system, so the app only makes it a link w
 
 The WildlifeNL connector of Protect (`shared/shared/integrations/connectors/wildlifenl.py`) posts one detection per species of a `SPECIES_DETECTION` event, which is how AddaxAI Connect pictures arrive: `deploymentID` is the camera's sensor ID, `sensorType` is `visual`, `start` and `end` are the capture time, `uri` is the link back, and `animals` holds one entry with the best confidence as a percentage and the event title as `description`.
 
-Note for the Protect side: since API `20261122` both servers want the species as `speciesName`, the exact Latin name, and no longer take `speciesID`. A connector that sends `speciesID` has its detections refused until it follows.
+The species goes in the field the server asks for: the connector reads it from the server's own `/openapi.json` (`detection_species_field`). Since API `20261122` both servers ask for `speciesName`, the exact Latin name; before that the live server asked for `speciesID`. An animal that Protect adds carries the entity's ear tag number as its `identifier`.
 
 ## Charts
 
