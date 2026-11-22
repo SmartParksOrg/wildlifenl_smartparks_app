@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Fixed
+
+- Sign out did nothing on the live map: the sign-in card did not come back until the page was reloaded.
+
 ## 2.5.2 - 2026-11-21
 
 The live map on a phone held sideways.

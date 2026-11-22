@@ -868,7 +868,8 @@ function wire() {
     if (["detectors", "events"].includes(selected.kind)) drawObjectPanel();
   });
   onSharing(() => {
-    if ($("view-map").hidden) return;
+    // signing out switches sharing off after the session is gone, with nothing left to draw
+    if ($("view-map").hidden || !account.session) return;
     drawFinds();
     drawPanel();
     if (selected.kind === "events") drawObjectPanel();
