@@ -4,6 +4,10 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+## 2.5.3 - 2026-11-22
+
+Sign out on the live map.
+
 ### Fixed
 
 - Sign out did nothing on the live map: the sign-in card did not come back until the page was reloaded.
