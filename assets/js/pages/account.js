@@ -2,6 +2,7 @@
 
 import { SCOPES } from "../api.js";
 import { operationLabel } from "../lib.js";
+import { REFRESH_CHOICES, refreshEvery, setRefreshEvery } from "../refresh.js";
 import { loadApi, writeOperations } from "../rights.js";
 import { account, explain, hasScope, refreshProfile, signOut } from "../session.js";
 import { onSharing, setSharing, sharing, showsNearby } from "../sharing.js";
@@ -91,6 +92,11 @@ function draw() {
 function wire() {
   wired = true;
   $("sharingSwitch").addEventListener("change", (event) => setSharing(event.target.checked));
+  $("refreshEvery").replaceChildren(...REFRESH_CHOICES.map((choice) => el("option", { value: String(choice.seconds), text: choice.label })));
+  $("refreshEvery").addEventListener("change", (event) => {
+    setRefreshEvery(Number(event.target.value));
+    toast(Number(event.target.value) ? `The app now refreshes ${event.target.selectedOptions[0].text.toLowerCase()}.` : "Automatic refresh is off. Use the refresh buttons on the pages.");
+  });
   onSharing(() => account.session && drawSharing());
   $("signOutButton2").addEventListener("click", () => signOut());
   $("copyToken").addEventListener("click", async () => {
@@ -117,6 +123,7 @@ function wire() {
 
 export function show() {
   if (!wired) wire();
+  $("refreshEvery").value = String(refreshEvery());
   draw();
 }
 

@@ -72,6 +72,8 @@ const research = (path) => ({ needs: SCOPES.research, call: `/${path}/experiment
  * - `shape(record)` adds what the app works out about a record, such as the state of an
  *   experiment.
  * - `related` are lists that hang under one record, each with its type and loader.
+ * - `people` says the list and the lists under a record come from what people.js read,
+ *   which a refresh reads again first.
  */
 export const TYPES = {
   species: {
@@ -139,6 +141,7 @@ export const TYPES = {
     nav: "alarms",
     description: "An animal, a detection or a report came inside a zone",
     list: fromPeople(() => people.alarms),
+    people: true,
     needs: SCOPES.alarms,
     ownOnly: true,
     mine: "/alarms/me/",
@@ -190,6 +193,7 @@ export const TYPES = {
     nav: "conveyances",
     description: "The messages and alarms that were shown to people, with who got them and why",
     list: fromPeople(() => people.conveyances),
+    people: true,
     needs: SCOPES.research,
     ownOnly: true,
     mine: "/conveyances/me/",
@@ -203,6 +207,7 @@ export const TYPES = {
     nav: "contacts",
     description: "A person's phone was near an animal's sensor for some time",
     list: fromPeople(() => people.contacts),
+    people: true,
     needs: SCOPES.research,
     ownOnly: true,
     columns: ["start", "end", "user", "borneSensorDeployment", "startLocation", "conveyances"],
@@ -215,6 +220,7 @@ export const TYPES = {
     nav: "people",
     description: "Where the recreation app recorded people",
     list: fromPeople(() => [...people.tracks.values()].flat().map((point) => point.raw)),
+    people: true,
     needs: SCOPES.research,
     ownOnly: true,
     columns: ["timestamp", "userID", "location"],
@@ -227,6 +233,7 @@ export const TYPES = {
     nav: "people",
     description: "The people the app knows of, with their profile where you may read it: recorded by the recreation app, or named in a report, a contact or a message",
     list: knownPeople,
+    people: true,
     needs: SCOPES.profiles,
     ownOnly: true,
     // the profile of anyone for an administrator and the own one for every account; of
@@ -364,8 +371,9 @@ export async function listRecords(type, mine = false) {
   return { records, own: Boolean((mine && def.mine) || (def.ownOnly && !all)) };
 }
 
-/** One record: read in full when the account may, else what was seen of it elsewhere. */
-export async function getRecord(type, id) {
+/** One record: read in full when the account may, else what was seen of it elsewhere.
+ * `fresh` reads the list it was seen in again when there is no call for one record. */
+export async function getRecord(type, id, fresh = false) {
   const def = TYPES[type];
   const known = seen.get(`${type}|${id}`) || null;
   if (def.get && hasScope(def.getNeeds || [])) {
@@ -375,7 +383,7 @@ export async function getRecord(type, id) {
     } catch (error) {
       if (error.status === 401 || !known) throw error;
     }
-  } else if (!known && (def.list || def.path)) {
+  } else if ((!known || fresh) && (def.list || def.path)) {
     await listRecords(type);
   }
   return seen.get(`${type}|${id}`) || null;

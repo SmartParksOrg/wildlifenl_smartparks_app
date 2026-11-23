@@ -6,7 +6,7 @@ import { SCOPES } from "../api.js";
 import { ago, buildHash, toTime } from "../lib.js";
 import { recordHash } from "../records.js";
 import { explain, hasScope } from "../session.js";
-import { addSensor, canListSensors, canReadReadings, listError, loadRecent, loadSensors, recentReadings } from "../store.js";
+import { addSensor, canListSensors, canReadReadings, listError, loadRecent, loadSensors, recentReadings, refreshSensors } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
 import { drawActions } from "../writes.js";
 
@@ -84,6 +84,7 @@ function draw() {
     ],
     raw: held,
     empty: list.empty(),
+    keep: true,
   });
 }
 
@@ -143,8 +144,17 @@ export async function show({ page }) {
   await reload();
 }
 
+/** Reads the sensors and their newest readings again. */
+export async function refresh() {
+  if (!current) return;
+  const problem = await refreshSensors();
+  await reload();
+  if (problem) note($(LISTS[current].note), problem, "warn");
+}
+
 export function reset() {
   run++;
+  current = "";
   sensors = [];
   for (const table of Object.values(tables)) table.setRows([]);
 }

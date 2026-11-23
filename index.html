@@ -206,6 +206,8 @@
           <a class="chip" id="sharingChip" href="#/account" title="This app sends your position to WildlifeNL while it is open. Click to change that." hidden><svg class="icon"><use href="#i-locate" /></svg><span>Sharing location</span></a>
           <span class="chip" id="serverChip"></span>
           <button class="btn ghost icon" type="button" id="themeButton" aria-label="Theme"><svg class="icon"><use href="#i-monitor" /></svg></button>
+          <!-- fills up until the next automatic refresh -->
+          <div class="refresh-bar" id="refreshBar" role="progressbar" aria-label="Next refresh" aria-valuemin="0" aria-valuemax="100" hidden><span></span></div>
         </header>
 
       <main class="content" id="content">
@@ -579,6 +581,14 @@
                 <span>Share my location from this device</span>
               </label>
               <p class="hint" id="sharingStatus"></p>
+            </div>
+            <div class="card stack">
+              <h2>Automatic refresh</h2>
+              <p class="hint">WildlifeNL does not send new data to the app, so the app reads it again by itself while it is open on your screen. The line under the top bar fills up until the next refresh. A short time asks WildlifeNL often; once a minute is enough to follow animals and detections. The choice holds for this device.</p>
+              <label class="field refresh-field">
+                <span>Refresh the page</span>
+                <select id="refreshEvery"></select>
+              </label>
             </div>
             <div class="card stack">
               <h2>What your account may read</h2>

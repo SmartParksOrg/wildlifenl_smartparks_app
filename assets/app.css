@@ -699,6 +699,7 @@ summary:focus-visible {
 }
 
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -706,6 +707,56 @@ summary:focus-visible {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--border);
   background: var(--card);
+}
+
+/* The automatic refresh: a thin line over the lower edge of the top bar that fills up until
+   the next refresh, and glides while one runs */
+.refresh-bar {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.refresh-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  opacity: 0.55;
+  transform-origin: left;
+  transition: transform 1s linear;
+}
+
+.refresh-bar.running > span {
+  opacity: 0.9;
+  transform: scaleX(0.3) !important;
+  transition: none;
+  animation: refresh-glide 1.2s ease-in-out infinite;
+}
+
+@keyframes refresh-glide {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 340% 0;
+  }
+}
+
+/* without motion, a full line says that a refresh runs */
+@media (prefers-reduced-motion: reduce) {
+  .refresh-bar.running > span {
+    transform: none !important;
+    animation: none;
+  }
+}
+
+.refresh-field {
+  max-width: 16rem;
 }
 
 .menu-button {
@@ -1517,6 +1568,20 @@ a.chip {
 
 .object-title strong {
   font-size: 1rem;
+}
+
+/* the name of what was picked leads to its page */
+.object-title a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+
+.object-title a:hover,
+.object-title a:focus-visible {
+  color: var(--primary);
+  text-decoration-color: currentColor;
 }
 
 .map-note {

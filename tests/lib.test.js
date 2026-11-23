@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BUCKETS, ago, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, copyBodies, experimentStatus, readiness, whyLocked, answeredOf, openQuestion, questionOrder, responseBodies, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
+import { BUCKETS, ago, countdownText, mergeReadings, apiOperations, formBody, formFields, formValues, localInput, operationLabel, webLink, copyBodies, experimentStatus, readiness, whyLocked, answeredOf, openQuestion, questionOrder, responseBodies, circleGrid, coverPlaces, sensorOfAnimal, databaseModel, fieldKind, speciesIcon, autoBucket, bucketSeries, buildHash, distanceMeters, flatten, formatDistance, leadingObjects, metricSeries, parseHash, problemText, toCsv, toPoint, toTime, trackLength, trackOf, withinWindow } from "../assets/js/lib.js";
 
 const T0 = Date.parse("2026-11-21T10:00:00Z");
 
@@ -475,3 +475,27 @@ test("copyBodies keeps the order and the jumps inside the questionnaire", () => 
   assert.deepEqual(copyBodies({ questions: null }), { questions: [], answers: [] });
 });
 
+
+test("mergeReadings adds what is new and keeps each reading once", () => {
+  const r = (minutes, extra = {}) => ({ sensorID: "A1", timestamp: new Date(T0 + minutes * 60000).toISOString(), ...extra });
+  const older = [r(3), r(2), r(1)];
+  assert.equal(mergeReadings(older, [r(3), r(2)], false), older, "nothing new keeps the same list");
+  assert.deepEqual(mergeReadings(older, [r(5), r(4), r(3)], false), [r(5), r(4), r(3), r(2), r(1)]);
+  // a reading that arrived late, with a moment inside the window that was loaded
+  assert.deepEqual(mergeReadings(older, [r(4), r(3), r(2.5, { late: true }), r(2)], false), [r(4), r(3), r(2.5, { late: true }), r(2), r(1)]);
+});
+
+test("mergeReadings asks for everything when the new part leaves a gap", () => {
+  const r = (minutes) => ({ timestamp: new Date(T0 + minutes * 60000).toISOString() });
+  assert.equal(mergeReadings([r(2), r(1)], [r(9), r(8)], false), null);
+  assert.equal(mergeReadings([], [r(9)], false), null, "no readings before and only part of the answer now");
+  assert.deepEqual(mergeReadings([r(2), r(1)], [r(9), r(8)], true), [r(9), r(8)], "a complete answer is everything");
+  assert.deepEqual(mergeReadings([], [], true), []);
+});
+
+test("countdownText says when the next refresh comes", () => {
+  assert.equal(countdownText(0), "now");
+  assert.equal(countdownText(-5000), "now");
+  assert.equal(countdownText(44200), "in 45 seconds");
+  assert.equal(countdownText(120000), "in 2 minutes");
+});

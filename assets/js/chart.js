@@ -74,6 +74,9 @@ export class LineChart {
     }
     const { unit, series } = this.content;
     const colours = theme();
+    // drawn again with new data or another theme, a chart stays zoomed where the person put it
+    const zoom = ((this.chart.getOption() || {}).dataZoom || [])[0];
+    const range = zoom && Number.isFinite(zoom.start) ? { start: zoom.start, end: zoom.end } : {};
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.chart.setOption(
       {
@@ -99,8 +102,8 @@ export class LineChart {
           splitLine: { lineStyle: { color: colours.grid } },
         },
         dataZoom: [
-          { type: "inside", filterMode: "none" },
-          { type: "slider", height: 18, bottom: 8, borderColor: colours.grid, textStyle: { color: colours.text }, brushSelect: false, showDataShadow: false, filterMode: "none", fillerColor: colours.zoom, handleStyle: { color: colours.tooltipBg, borderColor: colours.text }, moveHandleStyle: { color: colours.text } },
+          { type: "inside", filterMode: "none", ...range },
+          { type: "slider", ...range, height: 18, bottom: 8, borderColor: colours.grid, textStyle: { color: colours.text }, brushSelect: false, showDataShadow: false, filterMode: "none", fillerColor: colours.zoom, handleStyle: { color: colours.tooltipBg, borderColor: colours.text }, moveHandleStyle: { color: colours.text } },
         ],
         series: series.map((s) => ({
           name: s.name,

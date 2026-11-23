@@ -78,7 +78,8 @@ async function load() {
   for (const track of people.tracks.values()) track.sort((a, b) => a.t - b.t);
 
   // names: from what names a person, then asked per person for the ones still unknown
-  people.names = new Map([[session.userID, session.name || session.email || "You"]]);
+  // the names known from an earlier load stay, so a refresh does not ask them again
+  people.names = new Map([...people.names, [session.userID, session.name || session.email || "You"]]);
   for (const item of [...people.contacts, ...people.conveyances]) if (item.user && item.user.ID) people.names.set(item.user.ID, item.user.name);
   const unknown = [...people.tracks.keys()].filter((id) => !people.names.has(id)).slice(0, 40);
   await Promise.all(

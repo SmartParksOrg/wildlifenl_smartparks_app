@@ -9,7 +9,7 @@ import { METRICS, ago, autoBucket, BUCKETS, bucketSeries, buildHash, columnsOf, 
 import { MapView } from "../map.js";
 import { recordHash } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
-import { addSensor, canReadReadings, loadReadings, loadSensors, removeSensor, sensorByAnimal, sensorById } from "../store.js";
+import { addSensor, canReadReadings, loadReadings, loadSensors, refreshSensors, removeSensor, sensorByAnimal, sensorById } from "../store.js";
 import { $, DataTable, busy, el, facts, formatMoment, note, plural } from "../ui.js";
 import { drawActions } from "../writes.js";
 
@@ -19,6 +19,7 @@ const CHART_METRICS = ["temperature", "altitude", "speed"];
 
 let map = null;
 let table = null;
+/** the charts drawn, each `{metric, chart}` */
 let charts = [];
 /** the sensor whose data is shown, and whether the page leads with its animal */
 let id = "";
@@ -113,8 +114,8 @@ function drawAnimal(sensor) {
 }
 
 /** For an account that may not read readings: the last position WildlifeNL keeps of the
- * animal, from the search that found it. */
-function drawPlaced(sensor) {
+ * animal, from the search that found it. `keep` leaves the map where the person put it. */
+function drawPlaced(sensor, keep = false) {
   const place = sensor && sensor.place;
   const t = place ? place.t : NaN;
   facts($("sensorFacts"), [
@@ -130,37 +131,43 @@ function drawPlaced(sensor) {
   drawAnimal(sensor);
   $("sensorTrackText").textContent = place ? "Last known position" : "No position known";
   map.setTrack(false);
-  map.setPoints(place ? [place] : [], { describe: (p) => ["Last known position", [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, Number.isFinite(p.t) ? formatMoment(p.t) : ""]] });
+  map.setPoints(place ? [place] : [], { fit: !keep, describe: (p) => ["Last known position", [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, Number.isFinite(p.t) ? formatMoment(p.t) : ""]] });
   note($("sensorNote"), `The track, charts and readings need the ${SCOPES.readings.join(" or ")} role. This is where WildlifeNL last placed the animal; search the area on the live map again for a newer position.`);
 }
 
-function drawPeriod(readings, track) {
+/** The track, charts and readings of the chosen period. `keep` is for a refresh: the map,
+ * the zoom of the charts and the sorting of the table stay as the person left them. */
+function drawPeriod(readings, track, keep = false) {
   const from = periodStart();
   const inPeriod = withinWindow(readings, from, NaN, (r) => toTime(r.timestamp));
   const points = withinWindow(track, from, NaN);
 
   $("sensorTrackText").textContent = points.length ? `${plural(points.length, "position")}, ${formatDistance(trackLength(points))}` : "No positions in this period";
   map.setTrack(true);
-  map.setPoints(points, { describe: (p) => [formatMoment(p.t), [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, typeof p.raw.temperature === "number" ? `${p.raw.temperature} °C` : ""]] });
+  map.setPoints(points, { fit: !keep, describe: (p) => [formatMoment(p.t), [`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`, typeof p.raw.temperature === "number" ? `${p.raw.temperature} °C` : ""]] });
 
-  for (const chart of charts) chart.dispose();
   const span = Number.isFinite(from) ? Date.now() - from : Infinity;
   const bucket = BUCKETS[autoBucket(span)];
-  const cards = [];
   const drawn = [];
   for (const [index, metric] of CHART_METRICS.entries()) {
     const data = bucketSeries(metricSeries(inPeriod, metric), bucket);
-    if (!data.length) continue;
-    const area = el("div", { class: "chart small" });
-    cards.push(el("div", { class: "card stack" }, [el("h2", { text: `${METRICS[metric].label}${METRICS[metric].unit ? `, ${METRICS[metric].unit}` : ""}` }), area]));
-    drawn.push({ area, content: { unit: METRICS[metric].unit, series: [{ name: METRICS[metric].label, color: PALETTE[index], data }] } });
+    if (data.length) drawn.push({ metric, content: { unit: METRICS[metric].unit, series: [{ name: METRICS[metric].label, color: PALETTE[index], data }] } });
   }
-  $("sensorCharts").replaceChildren(...cards);
-  charts = drawn.map(({ area, content }) => {
-    const chart = new LineChart(area);
-    chart.set(content);
-    return chart;
-  });
+  // the same charts take the new data in place, so they keep their zoom
+  if (keep && drawn.length === charts.length && drawn.every((item, index) => item.metric === charts[index].metric)) {
+    drawn.forEach((item, index) => charts[index].chart.set(item.content));
+  } else {
+    for (const { chart } of charts) chart.dispose();
+    const cards = [];
+    charts = drawn.map(({ metric, content }) => {
+      const area = el("div", { class: "chart small" });
+      cards.push(el("div", { class: "card stack" }, [el("h2", { text: `${METRICS[metric].label}${METRICS[metric].unit ? `, ${METRICS[metric].unit}` : ""}` }), area]));
+      const chart = new LineChart(area);
+      chart.set(content);
+      return { metric, chart };
+    });
+    $("sensorCharts").replaceChildren(...cards);
+  }
 
   const rows = inPeriod.map(flatten);
   const present = columnsOf(rows);
@@ -168,21 +175,22 @@ function drawPeriod(readings, track) {
     columns: [...READING_COLUMNS.filter((c) => present.includes(c)), ...present.filter((c) => !READING_COLUMNS.includes(c))],
     sortKey: "timestamp",
     raw: inPeriod,
+    keep,
     empty: readings.length ? `No readings in this period. There are ${plural(readings.length, "reading")} in total; choose a longer period.` : "WildlifeNL has no readings for this sensor.",
   });
 }
 
-async function load(force = false) {
+async function load(force = false, keep = false) {
   const mine = id;
   note($("sensorNote"), "");
   try {
     drawHeader(sensorById(mine));
-    if (!canReadReadings()) return drawPlaced(sensorById(mine));
+    if (!canReadReadings()) return drawPlaced(sensorById(mine), keep);
     const { readings, track } = await loadReadings(mine, force);
     if (mine !== id) return;
     const sensor = sensorById(mine);
     drawFacts(sensor, readings, track);
-    drawPeriod(readings, track);
+    drawPeriod(readings, track, keep);
     if (!readings.length) note($("sensorNote"), `WildlifeNL has no readings for sensor ${mine}. Check the ID: the Protect integration sends the device's DevEUI, IMEI or serial unless it is set up otherwise.`, "warn");
   } catch (error) {
     const text = explain(error);
@@ -268,6 +276,14 @@ export async function show({ page, id: wanted }) {
     if (!explain(error)) return;
   }
   await load();
+}
+
+/** Reads the sensor and its newest readings again; the page stays as the person left it. */
+export async function refresh() {
+  if (!id) return;
+  const problem = await refreshSensors();
+  await load(false, true);
+  if (problem) note($("sensorNote"), problem, "warn");
 }
 
 export function reset() {

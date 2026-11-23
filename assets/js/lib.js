@@ -721,3 +721,33 @@ export function copyBodies(questionnaire) {
   };
 }
 
+
+/** All readings of a sensor after a refresh, newest first as the API answers. `older` is what
+ * was loaded before; `newer` the newest part of the answer, `complete` when that part was the
+ * whole answer. A reading that is in both is kept once, also one that arrived late with an
+ * older moment. When `newer` does not reach back to the newest of `older`, readings in
+ * between are missing and the answer is null: everything has to be read again. */
+export function mergeReadings(older, newer, complete) {
+  if (complete) return newer;
+  const times = (list) => list.map((reading) => toTime(reading.timestamp)).filter(Number.isFinite);
+  const newestOlder = Math.max(...times(older));
+  const oldestNewer = Math.min(...times(newer));
+  if (!(oldestNewer <= newestOlder)) return null;
+  // only the older readings in the window of `newer` can be in both
+  const known = new Set(older.filter((reading) => !(toTime(reading.timestamp) < oldestNewer)).map((reading) => JSON.stringify(reading)));
+  const added = newer.filter((reading) => !known.has(JSON.stringify(reading)));
+  if (!added.length) return older;
+  const time = (reading) => {
+    const t = toTime(reading.timestamp);
+    return Number.isFinite(t) ? t : -Infinity;
+  };
+  return [...added, ...older].sort((a, b) => time(b) - time(a));
+}
+
+/** When the next refresh comes, in a few words: "in 45 seconds", "in 2 minutes". */
+export function countdownText(ms) {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  if (seconds <= 1) return "now";
+  if (seconds < 90) return `in ${seconds} seconds`;
+  return `in ${Math.round(seconds / 60)} minutes`;
+}

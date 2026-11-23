@@ -31,6 +31,7 @@ assets/js/form.js        The dialog with the form of a change, or the question t
 assets/js/answering.js   Asking the questions of the questionnaire that belongs to a report
 assets/js/research.js    What a researcher does in more than one call: delete with what hangs under, copy
 assets/js/sharing.js     Sending the own position while the person has switched that on
+assets/js/refresh.js     The automatic refresh: the countdown, the line under the top bar, the setting
 assets/js/ui.js          Building blocks: elements, callouts, tiles, DataTable, MultiPicker
 assets/js/map.js         MapView (a page's small map) and LiveMap (the live map)
 assets/js/chart.js       LineChart on ECharts, loaded on first use
@@ -51,6 +52,16 @@ The address after `#` chooses the page: `#/map`, `#/animals`, `#/animals/{animal
 
 - `#/map?animal={id}&track=1` selects an animal and draws its track; `?sensor=`, `?detector=`, `?report=`, `?area=`, `?at=lat,lng` and `?layers={tab}` work the same way. The page then cleans the address.
 - `#/explore?sensors=a,b&metrics=temperature,speed&range=168&bucket=1h` is the whole state of the data explorer, so a link reproduces a view.
+
+## Automatic refresh
+
+The API pushes nothing, so `refresh.js` reads the page on screen again every so often. A page module that shows data exports `refresh()`; `route()` in `app.js` hands it to `refreshPage`, and a page without one (About, Account, Database) hides the line. A timer looks every second how far the countdown is and moves the line (`#refreshBar`, a `scaleX` with a one second transition). When it is due it waits for `refresh()` to finish before the next countdown starts, so a slow server never gets two at once.
+
+- **When.** Every 60 seconds by default; the choice is kept under `wnl-refresh` in seconds, `0` is off (`REFRESH_CHOICES`). The countdown waits while the page is in the background, while a `<dialog>` is open (a form must not change under the person) and while a search of an area runs (`detections.busy`), which already uses most of the request limit. Back on screen after it was due, the refresh comes at once.
+- **Readings cost kilobytes.** `refreshSensors` in `store.js` lists the sensors again and then, one sensor every 600 ms, reads the newest part of the readings of each sensor whose readings are in memory (`recentReadings`). `mergeReadings` in `lib.js` adds what is new to all readings loaded before, so a sensor of megabytes is not read again. Only when more came in than the newest part holds does it read everything. While the list is read again, the sensors in memory stay, and a refusal of the deployments keeps the animals that were listed.
+- **Detections.** `refreshDetections` asks the known places again and adds what is new, without clearing the map first. A period that ended today moves its end along with the day.
+- **Nothing jumps.** A table refreshed with `setRows(rows, {keep: true})` keeps the sorting and the rows shown, a map is not fitted again, and a chart of the same metric takes the new data in place (`LineChart` keeps its zoom). A record page draws the record anew only when it changed; else it reads the lists under it again. A kind marked `people` in `TYPES` reads `people.js` again first. The live map keeps what is picked, the tracks and the view, and reads its layers one after the other.
+- **Errors.** A page shows a problem in its own callout. What fails outside that is a toast, once per problem, not every minute.
 
 ## Frame
 
@@ -241,6 +252,7 @@ The flow in `app.js`: `requestCode`, then `redeemCode`, then `startSession`, whi
 | `wnl-report-places:{server}` | `localStorage` | The places where reports were found |
 | `wnl-share-location` | `localStorage` | The server and user ID of the account that switched on location sharing on this device |
 | `wnl-server` | `localStorage` | The platform of the last sign-in, chosen again next time |
+| `wnl-refresh` | `localStorage` | How often the app refreshes, in seconds; `0` is off. Once a minute when not set |
 | `wnl-detection-places:{server}` | `localStorage` | The places where detections were found, so the next visit asks only there |
 | `wl_nl_client` | `localStorage` | The key of the app before 2.0.0. Read once, moved to `wnl-session`, then removed |
 
@@ -313,7 +325,7 @@ There is no automated browser test in the repository, to keep it free of depende
 
 ## Release
 
-1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, the two tables on the Account page, a change on the test server (a report, a zone drawn on the map, the own profile), sign out, reload while signed in. Also: the sections of the navigation for the roles of the account, My reports, a report inside a running experiment with its questions (stop halfway and go on from the page of the report), the location switch on the Account page, and as a researcher a questionnaire with a jump, a copy of it and a delete with what hangs under it. Give a test report a moment of more than an hour ago, so nobody gets an alarm for it.
+1. Check by hand: sign in with a code, sign in with a token, the live map with a track and the tabs of the layers panel, the automatic refresh (the line under the top bar, a new reading on an open track and in the data explorer without losing the zoom, the setting on the Account page), the search, the animals list, an animal page and its sensor page, the data explorer, detections, a few record lists and records, the database page, the two tables on the Account page, a change on the test server (a report, a zone drawn on the map, the own profile), sign out, reload while signed in. Also: the sections of the navigation for the roles of the account, My reports, a report inside a running experiment with its questions (stop halfway and go on from the page of the report), the location switch on the Account page, and as a researcher a questionnaire with a jump, a copy of it and a delete with what hangs under it. Give a test report a moment of more than an hour ago, so nobody gets an alarm for it.
 2. Update `VERSION` and move the Unreleased entries in `CHANGELOG.md` under the new version and date.
 3. Commit and push to `main`. GitHub Pages publishes within a minute or two.
 

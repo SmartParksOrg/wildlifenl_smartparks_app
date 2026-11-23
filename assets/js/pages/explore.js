@@ -4,7 +4,7 @@
 import { PALETTE, LineChart } from "../chart.js";
 import { BUCKETS, METRICS, autoBucket, bucketSeries, buildHash, metricSeries, toCsv, toTime, withinWindow } from "../lib.js";
 import { explain } from "../session.js";
-import { loadReadings, loadSensors, sensorById } from "../store.js";
+import { loadReadings, loadSensors, refreshSensors, sensorById } from "../store.js";
 import { $, DataTable, MultiPicker, download, el, fileStamp, note, toast } from "../ui.js";
 
 const HOUR = 3600 * 1000;
@@ -13,6 +13,7 @@ const DEFAULT_RANGE = "168";
 let metricPicker = null;
 let sensorPicker = null;
 let table = null;
+/** the charts drawn, each `{metric, chart}` */
 let charts = [];
 let run = 0;
 /** sensor id to its slot in PALETTE: a sensor keeps its colour while it stays chosen */
@@ -39,15 +40,17 @@ function colourOf(id, chosen) {
 }
 
 function clear() {
-  for (const chart of charts) chart.dispose();
+  for (const { chart } of charts) chart.dispose();
   charts = [];
   $("exploreCharts").replaceChildren();
   $("exploreTable").hidden = true;
 }
 
-async function render(metrics, ids) {
+/** Draws the charts and the table. `keep` is for a refresh: charts of the same metrics take
+ * the new data in place, so their zoom stays, and so does the sorting of the table. */
+async function render(metrics, ids, keep = false) {
   const mine = ++run;
-  clear();
+  if (!keep) clear();
   note($("exploreNote"), "");
   const ready = metrics.length > 0 && ids.length > 0;
   const empty = $("exploreEmpty");
@@ -82,6 +85,7 @@ async function render(metrics, ids) {
   });
   const rows = new Map();
   const without = [];
+  const drawn = [];
   for (const metric of metrics) {
     const { label, unit } = METRICS[metric];
     const series = ids
@@ -98,17 +102,25 @@ async function render(metrics, ids) {
         rows.get(key)[metric] = Math.round(value * 1000) / 1000;
       }
     }
-    const area = el("div", { class: "chart" });
-    $("exploreCharts").append(el("div", { class: "card stack" }, [el("h2", { text: unit ? `${label}, ${unit}` : label }), area]));
-    const chart = new LineChart(area);
-    chart.set({ unit, series });
-    charts.push(chart);
+    drawn.push({ metric, title: unit ? `${label}, ${unit}` : label, content: { unit, series } });
+  }
+  if (keep && drawn.length === charts.length && drawn.every((item, index) => item.metric === charts[index].metric)) {
+    drawn.forEach((item, index) => charts[index].chart.set(item.content));
+  } else {
+    clear();
+    for (const { metric, title, content } of drawn) {
+      const area = el("div", { class: "chart" });
+      $("exploreCharts").append(el("div", { class: "card stack" }, [el("h2", { text: title }), area]));
+      const chart = new LineChart(area);
+      chart.set(content);
+      charts.push({ metric, chart });
+    }
   }
   if (without.length) note($("exploreNote"), `No ${without.join(", ")} data for the chosen animals in this period.`, "warn");
 
   // the table view of the charts: the same numbers, one row per moment and sensor
   $("exploreTable").hidden = rows.size === 0;
-  table.setRows([...rows.values()], { columns: ["time", "sensor", ...metrics.filter((m) => !without.includes(METRICS[m].label.toLowerCase()))], sortKey: "time" });
+  table.setRows([...rows.values()], { columns: ["time", "sensor", ...metrics.filter((m) => !without.includes(METRICS[m].label.toLowerCase()))], sortKey: "time", keep });
 }
 
 function wire() {
@@ -141,6 +153,14 @@ export async function show({ query }) {
   $("exploreRange").value = [...$("exploreRange").options].some((o) => o.value === query.range) ? query.range : DEFAULT_RANGE;
   $("exploreBucket").value = query.bucket in BUCKETS ? query.bucket : "auto";
   await render(metricPicker.values(), sensorPicker.values());
+}
+
+/** Reads the newest readings again and draws the same view with them. */
+export async function refresh() {
+  if (!metricPicker) return;
+  const problem = await refreshSensors();
+  await render(metricPicker.values(), sensorPicker.values(), true);
+  if (problem) note($("exploreNote"), problem, "warn");
 }
 
 export function reset() {

@@ -1,5 +1,6 @@
 // The frame of the app: sign-in, the navigation and which page is shown. Each page lives in
-// pages/ and exports `show(route)` and `reset()`.
+// pages/ and exports `show(route)` and `reset()`, and `refresh()` when it shows data that
+// the automatic refresh reads again.
 
 import { APP_NAME, ApiError, SCOPES, SERVERS, WildlifeNlClient } from "./api.js";
 import { buildHash, parseHash } from "./lib.js";
@@ -16,6 +17,7 @@ import { account, explain, hasScope, loadSession, openSession, refreshProfile, s
 import { resetDetections } from "./detections.js";
 import { closeForm, wireForm } from "./form.js";
 import { resetPeople } from "./people.js";
+import { refreshPage, startRefresh, stopRefresh } from "./refresh.js";
 import { TYPES, canList, listTitle, recordHash, resetRecords } from "./records.js";
 import { resetRights } from "./rights.js";
 import { onSharing, resetSharing, sharing, startSharing } from "./sharing.js";
@@ -219,6 +221,7 @@ function route() {
     else link.removeAttribute("aria-current");
   }
   document.title = `${key === "sensor" ? parsed.id : type ? listTitle(parsed.id in TYPES ? parsed.id : "species", mine) : page.title} · ${APP_NAME}`;
+  refreshPage(page.module.refresh);
   Promise.resolve(page.module.show(parsed)).catch((error) => {
     const text = explain(error);
     if (text) toast(text, true);
@@ -245,6 +248,7 @@ function showApp() {
   $("app").hidden = false;
   drawAccount();
   startSharing();
+  startRefresh();
   route();
 }
 
@@ -388,6 +392,7 @@ async function start() {
   account.onSignOut = (message) => {
     if ($("searchDialog").open) $("searchDialog").close();
     closeForm();
+    stopRefresh();
     resetRights();
     resetSharing();
     resetStore();

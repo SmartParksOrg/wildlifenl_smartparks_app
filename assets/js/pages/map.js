@@ -5,14 +5,14 @@
 // from people, living labs and zones.
 
 import { SCOPES } from "../api.js";
-import { counted, detections, detectorsOf, loadDetections, loadOwnReports, onDetections, reportPlace, searchBox, searchesAnimals, speciesName, stopSearch } from "../detections.js";
+import { counted, detections, detectorsOf, loadDetections, loadOwnReports, onDetections, refreshDetections, reportPlace, searchBox, searchesAnimals, speciesName, stopSearch } from "../detections.js";
 import { ago, buildHash, distanceMeters, formatDistance, speciesIcon, toTime, trackLength, webLink, withinWindow } from "../lib.js";
 import { BASEMAPS, LiveMap, TRACK_COLORS, trackColor } from "../map.js";
 import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, personName } from "../people.js";
 import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { onSharing, sharing } from "../sharing.js";
-import { canListSensors, canReadReadings, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, sensorByAnimal, sensorById } from "../store.js";
+import { canListSensors, canReadReadings, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, refreshSensors, sensorByAnimal, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 import { choices, drawTab, isCustomised, isShown, offerTabs, openTab, resetChoices, show as showRow } from "./map-layers.js";
 
@@ -358,10 +358,11 @@ function drawPanel() {
 // ---------------------------------------------------------------------------------------------
 // The panel of what is selected
 
-function panelHead(image, title, subtitle) {
+/** The head of a panel; with `href` the name leads to the page of what was picked. */
+function panelHead(image, title, subtitle, href = "") {
   return el("div", { class: "panel-head" }, [
     image ? el("img", { class: "object-icon", src: `assets/img/icons/${image}.svg`, alt: "" }) : null,
-    el("div", { class: "object-title" }, [el("strong", { text: title }), el("small", { text: subtitle })]),
+    el("div", { class: "object-title" }, [href ? el("a", { href, title: `Open ${title}` }, el("strong", { text: title })) : el("strong", { text: title }), el("small", { text: subtitle })]),
     el("button", { class: "btn ghost icon sm", type: "button", "aria-label": "Close", title: "Close", onclick: () => select("", "") }, icon("x")),
   ]);
 }
@@ -394,7 +395,7 @@ function sensorPanel(sensor, asSensor) {
   // without readings, the moment WildlifeNL last placed the animal
   const placed = sensor.place && Number.isFinite(sensor.place.t) ? sensor.place.t : NaN;
   return [
-    led ? panelHead("sensor", sensor.id, animal ? `sensor on ${animal.identifier}` : "sensor without an animal") : panelHead(iconOf(sensor), sensor.name, sensor.species || "animal"),
+    led ? panelHead("sensor", sensor.id, animal ? `sensor on ${animal.identifier}` : "sensor without an animal", buildHash("sensors", sensor.id)) : panelHead(iconOf(sensor), sensor.name, sensor.species || "animal", buildHash("animals", animal.ID)),
     factList([
       ["Last seen", !readable ? (Number.isFinite(placed) ? ago(placed) : "unknown") : loaded ? (newest ? ago(toTime(newest.timestamp)) : "no readings yet") : "loading…"],
       ["Position", !readable ? (Number.isFinite(placed) ? formatMoment(placed) : "") : last ? formatMoment(last.t) : loaded ? (loaded.complete ? "none yet" : "not recently") : ""],
@@ -423,7 +424,7 @@ function personPanel(id) {
   const contacts = people.contacts.filter((c) => c.user && c.user.ID === id).length;
   const messages = people.conveyances.filter((c) => c.user && c.user.ID === id).length;
   return [
-    panelHead("person", personName(id), "person"),
+    panelHead("person", personName(id), "person", recordHash("people", id)),
     factList([
       ["Last seen", last ? ago(last.t) : "never"],
       ["Position", last ? formatMoment(last.t) : ""],
@@ -446,7 +447,7 @@ function personPanel(id) {
 function nearPanel(animal, place) {
   const known = sensorByAnimal(animal.ID);
   return [
-    panelHead(reportIcon(animal), animal.identifier || "Animal", "animal near you"),
+    panelHead(reportIcon(animal), animal.identifier || "Animal", "animal near you", known ? buildHash("animals", animal.ID) : ""),
     factList([
       ["Species", animal.species ? animal.species.commonName || animal.species.name : ""],
       ["Last position", formatMoment(toTime(animal.locationTimestamp))],
@@ -463,7 +464,7 @@ function contactPanel(contact, place) {
   const end = toTime(contact.end);
   const minutes = Number.isFinite(end) ? Math.max(1, Math.round((end - start) / 60000)) : NaN;
   return [
-    panelHead("person", "Contact", "a person near an animal"),
+    panelHead("person", "Contact", "a person near an animal", recordHash("contacts", contact.ID)),
     factList([
       ["Person", contact.user ? link(recordHash("people", contact.user.ID), contact.user.name) : ""],
       ["Animal", animal ? link(buildHash("animals", animal.ID), animal.identifier) : ""],
@@ -479,7 +480,7 @@ function contactPanel(contact, place) {
 
 function alarmPanel(alarm, place) {
   return [
-    panelHead("alarm", "Alarm", alarmCause(alarm) || "in a zone"),
+    panelHead("alarm", "Alarm", alarmCause(alarm) || "in a zone", recordHash("alarms", alarm.ID)),
     factList([
       ["When", `${formatMoment(toTime(alarm.timestamp))} (${ago(toTime(alarm.timestamp))})`],
       ["Zone", alarm.zone ? link(recordHash("zones", alarm.zone.ID), alarm.zone.name || "Zone") : ""],
@@ -498,7 +499,7 @@ function detectorPanel(detector) {
   const newest = detector.detections.reduce((best, d) => (!best || toTime(d.start) > toTime(best.start) ? d : best), null);
   const picture = newest ? webLink(newest.uri) : "";
   return [
-    panelHead("camera_trap", detector.name, "detector"),
+    panelHead("camera_trap", detector.name, "detector", buildHash("detections", "", { detector: detector.name })),
     factList([
       ["Detections", `${detector.detections.length.toLocaleString()}, ${detections.from} to ${detections.to}`],
       ["Latest", `${formatMoment(detector.latest)} (${ago(detector.latest)})`],
@@ -521,7 +522,7 @@ function reportPanel(report, place) {
   const collision = report.reportOfCollision;
   const animals = (sighting && sighting.involvedAnimals) || (collision && collision.involvedAnimals) || [];
   return [
-    panelHead(reportIcon(report), reportName(report), "report"),
+    panelHead(reportIcon(report), reportName(report), "report", recordHash("reports", report.ID)),
     factList([
       ["When", `${formatMoment(reportTime(report))} (${ago(reportTime(report))})`],
       ["Species", report.species ? link(recordHash("species", report.species.ID), report.species.commonName || report.species.name) : ""],
@@ -540,7 +541,7 @@ function areaPanel(area) {
   const showing = visits.area === area.id;
   const species = (area.record.species || []).map((s) => s.commonName || s.name).join(", ");
   return [
-    panelHead("", area.name, lab ? "living lab" : "zone"),
+    panelHead("", area.name, lab ? "living lab" : "zone", recordHash(area.kind, area.id)),
     factList([
       ["Outline", plural(area.points.length, "point")],
       ["Species", species],
@@ -958,6 +959,21 @@ export async function show({ query }) {
     if (Number.isFinite(lat) && Number.isFinite(lng)) goTo({ lat, lng });
   }
   if (Object.keys(query).length) history.replaceState(null, "", buildHash("map"));
+}
+
+/** Reads everything on the map again: the animals and the readings in memory, the areas,
+ * the detections and reports at the known places, and the people. One after the other, so
+ * together they stay under WildlifeNL's limit of requests. What is picked, the tracks and
+ * the view stay as they are. */
+export async function refresh() {
+  if (!map || !map.map) return;
+  const problem = await refreshSensors();
+  await reload();
+  if (problem) note($("mapNote"), problem, "warn");
+  await loadAreas();
+  if (hasScope(SCOPES.detections) || hasScope(SCOPES.reports)) await refreshDetections();
+  await loadOwnReports(true);
+  await loadPeople(true);
 }
 
 /** Forgets what belongs to the account that signed out. */

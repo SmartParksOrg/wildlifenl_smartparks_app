@@ -4,6 +4,16 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ## Unreleased
 
+### Added
+
+- The app refreshes by itself, because WildlifeNL does not send new data: once a minute by default, every 30 seconds to every 15 minutes, or off, on the Account page. A thin line under the top bar fills up until the next refresh. The map view, what is picked, the tracks, the zoom of a chart and the sorting of a table stay as they are. The refresh waits while the app is not on screen, while a form is open and while a search runs.
+- On the live map the name at the top of a panel opens the page of the animal, the sensor or whatever else was picked.
+
+### Changed
+
+- A refresh of the readings of a sensor reads only what is new, a few kilobytes, in place of every reading again.
+- The period of the detections follows the day when it ends today, so an app that stays open sees the detections of the next day.
+
 ## 2.6.0 - 2026-11-22
 
 Follows WildlifeNL API 20261122, now on the live and the test server.

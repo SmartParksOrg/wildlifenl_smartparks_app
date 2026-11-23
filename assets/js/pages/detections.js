@@ -2,7 +2,7 @@
 // list of Smart Parks Protect. The detectors themselves are a layer of the live map, which
 // is also where an area is searched for them.
 
-import { counted, detections, loadDetections, onDetections, setPeriod, speciesName, stopSearch } from "../detections.js";
+import { counted, detections, loadDetections, onDetections, refreshDetections, setPeriod, speciesName, stopSearch } from "../detections.js";
 import { buildHash, webLink } from "../lib.js";
 import { recordHash } from "../records.js";
 import { $, DataTable, MultiPicker, formatMoment, note, plural } from "../ui.js";
@@ -73,6 +73,7 @@ function draw() {
     ],
     raw: shown,
     empty: detections.busy ? "Loading…" : "No detections to show.",
+    keep: true,
   });
 }
 
@@ -96,6 +97,11 @@ export function show({ query }) {
   if (query.species) speciesPicker.set(list(query.species).map((value) => ({ value, label: value })), list(query.species));
   loadDetections();
   draw();
+}
+
+/** Asks the known places again; what is new joins the list. */
+export function refresh() {
+  return refreshDetections();
 }
 
 export function reset() {

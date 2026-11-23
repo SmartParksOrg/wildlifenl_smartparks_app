@@ -6,6 +6,7 @@ import { buildHash, toTime, webLink, words } from "../lib.js";
 import { MapView } from "../map.js";
 import { TYPES, canList, getRecord, linkOf, listHash, listRecords, listTitle, recordHash, seesOwnOnly, relatedRecords, titleOf } from "../records.js";
 import { loadApi, operationOf } from "../rights.js";
+import { loadPeople } from "../people.js";
 import { explain, hasScope } from "../session.js";
 import { $, DataTable, el, facts, formatMoment, note, plural, toast } from "../ui.js";
 import { drawActions } from "../writes.js";
@@ -19,6 +20,11 @@ const PLACE_FIELDS = ["place", "location", "startLocation", "endLocation"];
 let listTable = null;
 let map = null;
 let run = 0;
+/** what is on screen, for a refresh: `{type, id, own}`, the record as drawn, and the lists
+ * under it `{relation, target, table}` */
+let shown = null;
+let shownRecord = null;
+let shownLists = [];
 
 function isPoint(value) {
   return Boolean(value) && typeof value === "object" && Number.isFinite(value.latitude) && Number.isFinite(value.longitude);
@@ -108,6 +114,7 @@ function columnsOf(records) {
 async function showList(type, own) {
   const def = TYPES[type];
   const mine = ++run;
+  shown = { type, id: "", own };
   const name = def.plural.toLowerCase();
   $("recordsTitle").textContent = listTitle(type, own);
   $("recordsDescription").textContent = def.description;
@@ -165,6 +172,9 @@ function card(title, body) {
 async function showRecord(type, id) {
   const def = TYPES[type];
   const mine = ++run;
+  shown = { type, id, own: false };
+  shownRecord = null;
+  shownLists = [];
   const extra = $("recordExtra");
   $("recordTitle").textContent = def.label;
   $("recordSubtitle").textContent = "";
@@ -185,6 +195,7 @@ async function showRecord(type, id) {
     return;
   }
   if (mine !== run) return;
+  shownRecord = record;
   if (!record) {
     const needs = def.getNeeds && def.getNeeds.length ? ` Opening one directly needs one of these roles: ${def.getNeeds.join(", ")}.` : "";
     return note($("recordNote"), `This ${def.label.toLowerCase()} is not known here.${needs}`, "warn");
@@ -245,28 +256,73 @@ async function showRecord(type, id) {
   for (const relation of def.related || []) {
     if (!hasScope(relation.needs || [])) continue;
     if (relation.call && described && !operationOf("GET", relation.call)) continue;
-    const target = el("div", { class: "empty", text: "Loading…" });
-    extra.append(card(relation.label, target));
-    relatedRecords(relation, record)
-      .then((rows) => {
-        if (mine !== run) return;
-        target.className = "";
-        const table = tableOf(relation.type || "", rows, relation.columns || columnsOf(rows));
-        // with its tools, so a list under a record can be copied and downloaded
-        new DataTable(target, { filename: `wildlifenl-${type}-${relation.type || "list"}`, empty: "Nothing here." }).setRows(table.rows, table.options);
-        if (relation.onMap && rows.length && map) {
-          map.setPoints(
-            rows.filter((row) => isPoint(row.location)).map((row) => ({ lat: row.location.latitude, lng: row.location.longitude, t: row.timestamp ? toTime(row.timestamp) : row.count, count: row.count, timestamp: row.timestamp })),
-            { fit: !outline.length, describe: (point) => [point.timestamp ? formatMoment(toTime(point.timestamp)) : plural(point.count, "visit"), [`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`]] },
-          );
-          map.setTrack(Boolean(rows[0].timestamp)); // the places of a person are a track, the visits of an area are not
-        }
-      })
-      .catch((error) => {
-        const text = explain(error);
-        if (text && mine === run) target.textContent = text;
-      });
+    const entry = { relation, target: el("div", { class: "empty", text: "Loading…" }), table: null, type, outline: outline.length > 0 };
+    extra.append(card(relation.label, entry.target));
+    shownLists.push(entry);
+    fillList(entry, record, mine, false);
   }
+}
+
+/** Reads a list under a record and draws it; on a refresh the table and map stay as the
+ * person left them. */
+async function fillList(entry, record, mine, keep) {
+  const { relation, target } = entry;
+  let rows;
+  try {
+    rows = await relatedRecords(relation, record);
+  } catch (error) {
+    const text = explain(error);
+    if (text && mine === run && !keep) target.textContent = text;
+    if (keep) throw error;
+    return;
+  }
+  if (mine !== run) return;
+  const table = tableOf(relation.type || "", rows, relation.columns || columnsOf(rows));
+  if (!entry.table) {
+    target.className = "";
+    // with its tools, so a list under a record can be copied and downloaded
+    entry.table = new DataTable(target, { filename: `wildlifenl-${entry.type}-${relation.type || "list"}`, empty: "Nothing here." });
+  }
+  entry.table.setRows(table.rows, { ...table.options, keep });
+  if (relation.onMap && rows.length && map) {
+    map.setPoints(
+      rows.filter((row) => isPoint(row.location)).map((row) => ({ lat: row.location.latitude, lng: row.location.longitude, t: row.timestamp ? toTime(row.timestamp) : row.count, count: row.count, timestamp: row.timestamp })),
+      { fit: !entry.outline && !keep, describe: (point) => [point.timestamp ? formatMoment(toTime(point.timestamp)) : plural(point.count, "visit"), [`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`]] },
+    );
+    map.setTrack(Boolean(rows[0].timestamp)); // the places of a person are a track, the visits of an area are not
+  }
+}
+
+/** Reads the list on screen again; the sorting and filter the person chose stay. */
+async function refreshList(type, own) {
+  const mine = run;
+  const def = TYPES[type];
+  const { records } = await listRecords(type, own);
+  if (mine !== run) return;
+  const { rows, options } = tableOf(type, records, def.columns);
+  listTable.setRows(rows, { ...options, empty: `No ${def.plural.toLowerCase()} to show.`, keep: true });
+}
+
+/** Reads the record on screen again. A record that changed is drawn anew; else only the
+ * lists under it are read again, so what the person did in them stays. */
+async function refreshRecord(type, id) {
+  const mine = run;
+  const record = await getRecord(type, id, true);
+  if (mine !== run) return;
+  if (JSON.stringify(record) !== JSON.stringify(shownRecord)) return showRecord(type, id);
+  for (const entry of shownLists) {
+    await fillList(entry, record, mine, true);
+    if (mine !== run) return;
+  }
+}
+
+/** Reads what the page on screen shows again, for the automatic refresh. */
+export async function refresh() {
+  if (!shown) return;
+  const { type, id, own } = shown;
+  if (TYPES[type].people) await loadPeople(true);
+  if (id) await refreshRecord(type, id);
+  else await refreshList(type, own);
 }
 
 /** Shows the list of a kind, or one record of it; an unknown kind goes to the species. */
@@ -280,5 +336,8 @@ export async function show({ id: type, sub, query }) {
 
 export function reset() {
   run++;
+  shown = null;
+  shownRecord = null;
+  shownLists = [];
   if (listTable) listTable.setRows([]);
 }

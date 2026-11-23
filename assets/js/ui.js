@@ -136,17 +136,20 @@ export class DataTable {
 
   /** @param rows flat objects; `raw` is what Copy JSON gives (the server's own records) */
   /** `format` gives the text shown for a column, while sorting and CSV keep the value itself */
-  setRows(rows, { columns, labels = {}, format = {}, sortKey, sortDir = -1, raw, link = null, empty } = {}) {
+  /** `keep` is for a refresh: the sorting the person chose and the rows shown stay */
+  setRows(rows, { columns, labels = {}, format = {}, sortKey, sortDir = -1, raw, link = null, empty, keep = false } = {}) {
+    const before = { sortKey: this.sortKey, sortDir: this.sortDir };
     this.rows = rows;
     this.raw = raw || rows;
     this.columns = columns || columnsOf(rows);
     this.labels = labels;
     this.format = format;
     this.links = [].concat(link || []);
-    this.sortKey = sortKey || this.columns[0] || null;
-    this.sortDir = sortDir;
+    const kept = keep && this.columns.includes(before.sortKey);
+    this.sortKey = kept ? before.sortKey : sortKey || this.columns[0] || null;
+    this.sortDir = kept ? before.sortDir : sortDir;
     if (empty) this.emptyNode.textContent = empty;
-    this.draw(true);
+    this.draw(!keep);
   }
 
   visibleRows() {

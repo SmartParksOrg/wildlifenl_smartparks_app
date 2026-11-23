@@ -63,6 +63,8 @@ function kindsFor(area) {
 const listeners = new Set();
 let run = 0;
 let lastStart = 0;
+/** Whether the period ends today, so a refresh on a later day moves its end along. */
+let followsToday = true;
 /** The reports the account made itself, which every account may read. */
 let ownReports = null;
 
@@ -206,6 +208,26 @@ export function loadDetections(force = false) {
   changed();
 }
 
+/** Asks the known places again, without clearing what is shown: what is new is added. A
+ * period that ends today moves its end along with the day. Nothing happens while a search
+ * runs, and a search that starts ends this one. */
+export async function refreshDetections() {
+  if (!detections.loaded || detections.busy) return;
+  if (followsToday) detections.to = dateText(Date.now());
+  const mine = run;
+  const kinds = kindsFor(false);
+  for (const centre of coverPlaces(knownPlaces(), MAX_RADIUS_M * 0.9)) {
+    for (const kind of kinds) {
+      const list = await ask(kind, centre, mine);
+      if (mine !== run) return;
+      for (const item of list) kind.into().set(item.ID, item);
+      if (list.length) remember(kind, list);
+    }
+  }
+  if (detections.found.size || detections.reports.size) detections.message = "";
+  changed();
+}
+
 /** Changes the period, as two `yyyy-mm-dd` dates, and loads it. */
 export function setPeriod(from, to) {
   if (!(toTime(`${from}T00:00`) <= toTime(`${to}T23:59:59`))) {
@@ -214,6 +236,7 @@ export function setPeriod(from, to) {
   }
   detections.from = from;
   detections.to = to;
+  followsToday = to === dateText(Date.now());
   loadDetections(true);
 }
 
@@ -275,6 +298,7 @@ export function resetDetections() {
   detections.animals = 0;
   detections.from = dateText(Date.now() - DEFAULT_DAYS * DAY);
   detections.to = dateText(Date.now());
+  followsToday = true;
   detections.busy = false;
   detections.progress = "";
   detections.message = "";

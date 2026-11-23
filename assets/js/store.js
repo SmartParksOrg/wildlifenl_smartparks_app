@@ -9,11 +9,14 @@
 // by the last position WildlifeNL keeps of it, and its sensor by nothing more.
 
 import { ApiError, SCOPES } from "./api.js";
-import { sensorOfAnimal, toTime, trackOf } from "./lib.js";
+import { mergeReadings, sensorOfAnimal, toTime, trackOf } from "./lib.js";
 import { account, hasScope } from "./session.js";
 
 const ADDED_KEY = "wnl-sensors";
 const FOUND_KEY = "wnl-found-animals";
+/** A refresh asks one sensor at a time, at most one every this many milliseconds: about 100
+ * a minute, under WildlifeNL's limit of 120 requests a minute per account. */
+const PACE_MS = 600;
 
 /** @typedef {{id:string, name:string, animal:object|null, species:string, start:string, added:boolean, found:boolean, place:{lat:number,lng:number,t:number}|null}} Sensor */
 
@@ -88,6 +91,8 @@ async function fetchSensors() {
     } catch (error) {
       if (error.status === 401) throw error;
       state.listError = error.message;
+      // a refresh that fails keeps the animals that were listed, rather than wiping the map
+      for (const sensor of state.sensors || []) if (sensor.animal && !sensor.found) byId.set(sensor.id, sensor);
     }
   }
   for (const deployment of foundDeployments()) {
@@ -110,10 +115,10 @@ function applyLoaded(sensor) {
   sensor.place = { lat: last.lat, lng: last.lng, t: last.t };
 }
 
-/** The sensors, from memory unless `force`. */
+/** The sensors, from memory unless `force`. While they are read again, the ones in memory
+ * stay, so a page that draws in between still finds them. */
 export function loadSensors(force = false) {
-  if (force) state.sensors = null;
-  if (state.sensors) return Promise.resolve(state.sensors);
+  if (state.sensors && !force) return Promise.resolve(state.sensors);
   if (!state.loading) {
     state.loading = fetchSensors()
       .then((sensors) => (state.sensors = sensors))
@@ -239,6 +244,52 @@ export function loadRecent(id) {
     state.recent.set(id, promise);
   }
   return state.recent.get(id);
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Reads the newest readings of a sensor again and adds them to what is in memory. Only the
+ * first part of the answer is read, so a refresh costs kilobytes; everything is read again
+ * only when more came in than that part holds. */
+async function refreshReadings(id) {
+  const { readings, complete } = await account.api.recentReadings(id);
+  const recent = { readings, track: trackOf(readings), complete };
+  state.recentLoaded.set(id, recent);
+  state.recent.set(id, Promise.resolve(recent));
+  const loaded = state.loaded.get(id);
+  if (loaded || complete) {
+    const all = (loaded ? mergeReadings(loaded.readings, readings, complete) : readings) || (await account.api.readings(id));
+    if (!loaded || all !== loaded.readings) {
+      const data = { readings: all, track: trackOf(all) };
+      state.loaded.set(id, data);
+      state.readings.set(id, Promise.resolve(data));
+    }
+  }
+  const sensor = sensorById(id);
+  if (sensor) applyLoaded(sensor);
+}
+
+/** Reads the sensors again, and the readings of every sensor that has readings in memory,
+ * one sensor at a time. Returns a text when some readings could not be read, else "". */
+export async function refreshSensors() {
+  await loadSensors(true);
+  if (!canReadReadings()) return "";
+  const ids = [...new Set([...state.loaded.keys(), ...state.recentLoaded.keys()])];
+  const failed = [];
+  let last = 0;
+  for (const id of ids) {
+    const pause = last + PACE_MS - Date.now();
+    if (pause > 0) await wait(pause);
+    if (!account.session) return ""; // signed out in between
+    last = Date.now();
+    try {
+      await refreshReadings(id);
+    } catch (error) {
+      if (error.status === 401) throw error;
+      failed.push(`${id}: ${error.message}`);
+    }
+  }
+  return failed.length ? `Could not refresh the readings of ${failed.length === 1 ? "sensor" : `${failed.length} sensors`} ${failed.join("; ")}` : "";
 }
 
 /** The newest readings in memory: all of them when loaded, else the recent part, else null. */

@@ -33,6 +33,12 @@ Every table can be sorted, filtered, copied as JSON and downloaded as CSV. The a
 
 The frame is the one of Protect: a top bar with the search (Ctrl K finds an animal, a sensor or a page) and a navigation column that folds away. On a narrow screen the navigation opens from the menu button.
 
+### Automatic refresh
+
+WildlifeNL does not send new data to the app, so the app reads it again by itself: the live map, the lists of animals and sensors, the page of an animal or a sensor, the data explorer, detections and every other list and record. A thin line under the top bar fills up until the next refresh and glides while one runs. A refresh keeps what you did: the map view, what you picked, the tracks, the zoom of a chart, and the sorting and filter of a table.
+
+Once a minute by default. On the Account page you choose every 30 seconds, every minute, every 2, 5 or 15 minutes, or off; the choice holds for that device. The refresh waits while the app is not on screen, while a form is open and while a search of an area runs, and comes at once when it was due in the meantime. The refresh buttons on the pages still work.
+
 ### What your account sees
 
 WildlifeNL decides per role what an account may read, and the navigation only shows what yours may open. The Account page lists it.
@@ -125,7 +131,7 @@ The map is laid out like the live map of Protect.
 - **Tools** (top right, square buttons): the base map, 3D terrain, measuring a distance, and the tracks with their length (24 hours to everything) once a track is on. Up to eight tracks at a time, each in its own colour.
 - **Base maps:** Light, Streets, Bright and Night from OpenFreeMap, Satellite (Esri World Imagery), Aerial photo of the Netherlands (PDOK) and Topographic (OpenTopoMap). The default follows the theme. None needs a key.
 - **Markers:** an animal is a disc with the icon of its species, a sensor a rounded square, a person a disc with a person, a detector a diamond with a camera, and a report, a contact or an alarm a sand coloured diamond. Animals that would overlap become one disc with a number; click it to zoom in.
-- **Click anything** for its panel, with icon buttons to its page, its data and its place.
+- **Click anything** for its panel, with icon buttons to its page, its data and its place. The name at the top of the panel also opens its page.
 
 ### Detections
 
