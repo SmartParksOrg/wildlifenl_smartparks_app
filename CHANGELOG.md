@@ -7,7 +7,13 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 ### Added
 
 - The app refreshes by itself, because WildlifeNL does not send new data: once a minute by default, every 30 seconds to every 15 minutes, or off, on the Account page. A thin line under the top bar fills up until the next refresh. The map view, what is picked, the tracks, the zoom of a chart and the sorting of a table stay as they are. The refresh waits while the app is not on screen, while a form is open and while a search runs.
+- On the page of an animal a herd manager can take its sensor off again (`PUT /borne-sensor-deployment/end`, API 20261123). The button shows only on a server that offers the call.
+- The page of a sensor says who deployed it, where WildlifeNL tells.
 - On the live map the name at the top of a panel opens the page of the animal, the sensor or whatever else was picked.
+
+### Fixed
+
+- The animals and sensors show again on the test server. WildlifeNL API `20261123` moved the active deployments to `GET /borne-sensor-deployment/me/active/`; the app now uses that path and falls back to `/borne-sensor-deployment/active/` on a server that still has it.
 
 ### Changed
 

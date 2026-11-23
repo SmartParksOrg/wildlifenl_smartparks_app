@@ -171,7 +171,7 @@ To offer another call: add an action to `ACTIONS`. To check by hand, sign in on 
 
 `store.js` is the one place that knows which sensors exist. A sensor comes from one of three sources:
 
-- `GET /borne-sensor-deployment/active/`, which only herd managers may call.
+- `GET /borne-sensor-deployment/me/active/` (API `20261123`, now on the test server) or `GET /borne-sensor-deployment/active/` (earlier versions, still on live), which only herd managers may call. `activeDeployments` in `api.js` tries the new path first and keeps the one that answers. The new path lists the deployments of the account that asks. A deployment has an `ID` and a `user` since that version; the sensor keeps them as `deployment` and `deployedBy`, and the action "Take the sensor off" in `writes.js` sends that ID to `PUT /borne-sensor-deployment/end`.
 - The animals a search of the live map found (`addFound`), for an area manager or wildlife manager. `GET /animals/` answers with the animals whose last position is inside a circle and a period, each with its deployments; `sensorOfAnimal` in `lib.js` picks the sensor it carries. They are kept under `wnl-found-animals:{server}:{user}` without their readings.
 - The IDs the user added, kept under `wnl-sensors`. Only for an account that may read readings: an added sensor has nothing else to show.
 
@@ -201,7 +201,7 @@ The calls that read, by where the app uses them. The calls that change something
 | `POST /auth/`, `PUT /auth/` | Ask for a login code by email, then trade it for a credential (`token`, `scopes`, `email`, `userID`) | none |
 | `GET /profile/me/` | Check the token, read the name and the roles | any account |
 | `GET /openapi.json` | The Database page, and the roles and fields of every call that changes something | none |
-| `GET /borne-sensor-deployment/active/` | The animals and their sensors | `herd-manager` |
+| `GET /borne-sensor-deployment/me/active/`, before API `20261123` `GET /borne-sensor-deployment/active/` | The animals and their sensors | `herd-manager` |
 | `GET /animals/` | The animals in a searched area, by `start`, `end`, `latitude`, `longitude`, `radius` | `nature-area-manager`, `wildlife-manager`, `herd-manager` |
 | `GET /animal/{id}` | The animal on its page | `herd-manager` |
 | `GET /borne-sensor-readings/sensor/{id}` | All readings of a sensor | `herd-manager` |

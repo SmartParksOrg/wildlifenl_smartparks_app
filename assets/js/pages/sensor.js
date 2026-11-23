@@ -75,6 +75,7 @@ function drawFacts(sensor, readings, track) {
     ["Sensor ID", asAnimal ? el("a", { href: buildHash("sensors", id), text: id }) : id],
     ["Source", sensor && sensor.animal ? "Active deployment" : "Added by hand, no active deployment known"],
     ["Deployed since", sensor && sensor.start ? formatMoment(toTime(sensor.start)) : ""],
+    ["Deployed by", sensor && sensor.deployedBy ? el("a", { href: recordHash("people", sensor.deployedBy.ID), text: sensor.deployedBy.name || sensor.deployedBy.ID }) : ""],
     ["Readings", readings.length.toLocaleString()],
     ["With a position", track.length.toLocaleString()],
     ["First reading", times.length ? formatMoment(Math.min(...times)) : "none"],

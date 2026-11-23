@@ -54,7 +54,7 @@ async function request(url, { method = "GET", headers = {}, body } = {}) {
   return text ? data : null;
 }
 
-/** Roles that may call each read endpoint, from the API's OpenAPI document (version 20261122).
+/** Roles that may call each read endpoint, from the API's OpenAPI document (version 20261123).
  * An empty list means every signed-in account. The navigation in index.html names these keys
  * to say who sees an entry. */
 export const SCOPES = {
@@ -105,8 +105,22 @@ export class WildlifeNlClient {
     return Array.isArray(data) ? data : [];
   }
 
-  activeDeployments() {
-    return this.list("/borne-sensor-deployment/active/");
+  /** The active deployments: the animals and the sensors they carry. API 20261123 lists them
+   * at `/me/active/`, for the account that asks; earlier versions at `/active/`. The first
+   * path that answers is kept, so a server asks for a missing path only once. */
+  async activeDeployments() {
+    const paths = this.deploymentsPath ? [this.deploymentsPath] : ["/borne-sensor-deployment/me/active/", "/borne-sensor-deployment/active/"];
+    for (const [index, path] of paths.entries()) {
+      try {
+        const list = await this.list(path);
+        this.deploymentsPath = path;
+        return list;
+      } catch (error) {
+        if (error.status !== 404 && error.status !== 405) throw error;
+        if (index === paths.length - 1) throw error;
+      }
+    }
+    return [];
   }
 
   readings(sensorId) {

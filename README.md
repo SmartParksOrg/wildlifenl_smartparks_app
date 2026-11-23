@@ -58,7 +58,7 @@ A list that exists for everyone and for yourself, such as Reports and My reports
 
 | To see | Role |
 | --- | --- |
-| The animals and their sensors | `herd-manager` sees them all; `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map |
+| The animals and their sensors | `herd-manager` sees the active deployments (on the test server, since API 20261123, the ones of their own account); `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map |
 | The readings of a sensor: the track, charts and measurements of an animal | `herd-manager` |
 | Detections, reports from others, visits of a living lab | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Zones | `land-user` or `wildlife-manager` |
@@ -76,7 +76,7 @@ The app reads from WildlifeNL itself which changes it accepts and which roles ea
 
 | To change | Where | Role |
 | --- | --- | --- |
-| Add an animal, put a sensor on an animal | Animals, the page of an animal | `herd-manager` |
+| Add an animal, put a sensor on an animal, take it off again | Animals, the page of an animal | `herd-manager` |
 | Draw a zone, add or remove its species, deactivate it | Zones, the page of a zone | `land-user` or `wildlife-manager` |
 | Make a report: a sighting, damage or a collision, and answer the questions an experiment has about it | Reports, the page of a report | Any account |
 | Add an experiment, change, end or delete it, add its questionnaires, questions, answer options and messages, copy a questionnaire | Experiments and the pages under it | `researcher`, and only for your own experiments, before they start |

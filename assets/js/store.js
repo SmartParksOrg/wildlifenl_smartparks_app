@@ -18,7 +18,7 @@ const FOUND_KEY = "wnl-found-animals";
  * a minute, under WildlifeNL's limit of 120 requests a minute per account. */
 const PACE_MS = 600;
 
-/** @typedef {{id:string, name:string, animal:object|null, species:string, start:string, added:boolean, found:boolean, place:{lat:number,lng:number,t:number}|null}} Sensor */
+/** @typedef {{id:string, name:string, animal:object|null, species:string, start:string, deployment:string, deployedBy:object|null, added:boolean, found:boolean, place:{lat:number,lng:number,t:number}|null}} Sensor */
 
 const state = {
   /** @type {Sensor[]|null} */ sensors: null,
@@ -72,6 +72,9 @@ function fromDeployment(deployment) {
     animal,
     species,
     start: deployment.start || "",
+    // the ID of the deployment and who made it, since API 20261123
+    deployment: deployment.ID || "",
+    deployedBy: deployment.user || null,
     added: false,
     found: false,
     // the animal's current location, until the sensor's own readings are loaded. The animals
@@ -101,7 +104,7 @@ async function fetchSensors() {
   // a sensor added by its ID shows nothing but its readings, so only for who may read them
   for (const id of canReadReadings() ? addedIds() : []) {
     if (byId.has(id)) byId.get(id).added = true;
-    else byId.set(id, { id, name: id, animal: null, species: "", start: "", added: true, found: false, place: null });
+    else byId.set(id, { id, name: id, animal: null, species: "", start: "", deployment: "", deployedBy: null, added: true, found: false, place: null });
   }
   const sensors = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   for (const sensor of sensors) applyLoaded(sensor);
@@ -178,7 +181,7 @@ export function addFound(animals) {
     if (!deployment) continue;
     // the animal without its deployments and their readings, which can be megabytes
     const { borneSensorDeployments, ...rest } = animal;
-    byId.set(deployment.sensorID, { sensorID: deployment.sensorID, start: deployment.start || "", animal: rest });
+    byId.set(deployment.sensorID, { sensorID: deployment.sensorID, ID: deployment.ID || "", start: deployment.start || "", animal: rest });
     taken++;
   }
   if (taken) {

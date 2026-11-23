@@ -7,13 +7,13 @@ import { answerReport } from "./answering.js";
 import { SCOPES } from "./api.js";
 import { loadOwnReports } from "./detections.js";
 import { openForm } from "./form.js";
-import { experimentStatus, formFields, formValues, whyLocked } from "./lib.js";
+import { experimentStatus, formFields, formValues, sensorOfAnimal, whyLocked } from "./lib.js";
 import { loadPeople } from "./people.js";
 import { TYPES, forget, listRecords, remember, titleOf } from "./records.js";
 import { answersOf, copyQuestionnaire, deleteExperiment, deleteQuestion, deleteQuestionnaire, experimentContents, questionnaireContents } from "./research.js";
 import { loadApi, operationOf } from "./rights.js";
 import { account, explain, hasScope } from "./session.js";
-import { loadSensors } from "./store.js";
+import { loadSensors, sensorByAnimal } from "./store.js";
 import { busy, el, toast } from "./ui.js";
 
 /** Whether a record belongs to the account, where the record says whose it is. WildlifeNL
@@ -46,6 +46,16 @@ async function upcomingExperiments() {
 const SEVERITIES = ["Debug", "Info", "Warning", "Urgent", "Critical"].map((name, index) => ({ value: index + 1, label: `${index + 1}: ${name}` }));
 
 const now = () => new Date().toISOString();
+/** The ID of the deployment that puts a sensor on this animal now, or "". It comes from the
+ * active deployments, or from the deployments of an animal read on its own. A deployment has
+ * an ID since API 20261123. */
+function activeDeployment(animal) {
+  const sensor = animal && sensorByAnimal(animal.ID);
+  if (sensor && sensor.deployment) return sensor.deployment;
+  const deployment = sensorOfAnimal(animal);
+  return deployment && !deployment.end && deployment.ID ? deployment.ID : "";
+}
+
 const reloadPeople = () => loadPeople(true).catch(() => {}); // the pages that show people report their own errors
 
 /**
@@ -157,6 +167,16 @@ export const ACTIONS = {
   animals: [
     { label: "Add animal", where: "list", call: ["POST", "/animal/"], text: "The animal shows in the list of animals once a sensor is on it." },
     { label: "Put a sensor on this animal", where: "record", call: ["POST", "/borne-sensor-deployment/"], preset: (animal) => ({ animalID: animal.ID }), defaults: () => ({ start: now() }), after: () => loadSensors(true), text: "A sensor is on one animal at a time: an earlier deployment of this sensor ends at the start you give here." },
+    {
+      label: "Take the sensor off",
+      where: "record",
+      call: ["PUT", "/borne-sensor-deployment/end"],
+      preset: (animal) => ({ ID: activeDeployment(animal) }),
+      defaults: () => ({ timestamp: now() }),
+      show: (animal) => Boolean(activeDeployment(animal)),
+      after: () => loadSensors(true),
+      text: "The deployment ends at the moment you give. The readings stay in WildlifeNL, and the animal leaves the list of animals until a sensor is put on it again.",
+    },
   ],
   account: [{ label: "Edit profile", where: "record", call: ["PUT", "/profile/me/"], edit: true, hide: ["firebaseCloudMessagingToken"] }],
 };
@@ -164,7 +184,7 @@ export const ACTIONS = {
 /** Which kind of record a field of a form picks from, by the name of the field. */
 const REFERS = { speciesID: "species", livingLabID: "livinglabs", typeID: "report-types", interactionTypeID: "report-types", experimentID: "experiments", questionnaireID: "questionnaires", questionID: "questions", nextQuestionID: "questions", answerID: "answers", zoneID: "zones", roleID: "roles" };
 /** Names of fields that read better than the API's own. */
-const LABELS = { nextQuestionID: "Next question", definition: "Area" };
+const LABELS = { nextQuestionID: "Next question", definition: "Area", timestamp: "Ends at" };
 /** The order of a form: what is typed or picked first, then the places, then the details. */
 const RANK = { point: 1, outline: 1, group: 2, list: 2 };
 
