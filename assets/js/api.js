@@ -123,6 +123,12 @@ export class WildlifeNlClient {
     return [];
   }
 
+  /** Whether the deployments this server lists are only those of the account that asks, as
+   * since API 20261123. Known after the first `activeDeployments`. */
+  get listsOwnDeployments() {
+    return this.deploymentsPath === "/borne-sensor-deployment/me/active/";
+  }
+
   readings(sensorId) {
     return this.list(`/borne-sensor-readings/sensor/${encodeURIComponent(sensorId)}`);
   }

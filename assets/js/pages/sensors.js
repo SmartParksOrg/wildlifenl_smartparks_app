@@ -6,7 +6,7 @@ import { SCOPES } from "../api.js";
 import { ago, buildHash, toTime } from "../lib.js";
 import { recordHash } from "../records.js";
 import { explain, hasScope } from "../session.js";
-import { addSensor, canListSensors, canReadReadings, listError, loadRecent, loadSensors, recentReadings, refreshSensors } from "../store.js";
+import { addSensor, canListSensors, canReadReadings, listError, listsAllSensors, loadRecent, loadSensors, recentReadings, refreshSensors } from "../store.js";
 import { $, DataTable, busy, note } from "../ui.js";
 import { drawActions } from "../writes.js";
 
@@ -20,7 +20,7 @@ const LISTS = {
     columns: ["animal", "species", "last_seen", "last_position", "sensor", "deployed_since"],
     labels: { animal: "Animal", species: "Species", last_seen: "Last seen", last_position: "Last position", sensor: "Sensor", deployed_since: "Sensor since" },
     sortKey: "animal",
-    empty: () => (canListSensors() ? "WildlifeNL has no animals with an active sensor." : hasScope(SCOPES.animalsNear) ? "No animals found yet. Open the live map, go to an area and search it under Layers." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.`),
+    empty: () => (listsAllSensors() ? "WildlifeNL has no animals with an active sensor." : canListSensors() ? "WildlifeNL lists only the animals your own account put a sensor on, and there are none. Open the live map, go to an area and search it under Layers to find the others." : hasScope(SCOPES.animalsNear) ? "No animals found yet. Open the live map, go to an area and search it under Layers." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.`),
   },
   sensors: {
     table: "sensorsTable",
@@ -30,7 +30,7 @@ const LISTS = {
     columns: ["sensor", "animal", "last_reading", "last_position", "readings", "deployed_since", "source"],
     labels: { sensor: "Sensor ID", animal: "On animal", last_reading: "Last reading", last_position: "Last position", readings: "Readings", deployed_since: "Deployed since", source: "Source" },
     sortKey: "sensor",
-    empty: () => (canListSensors() ? "WildlifeNL has no active sensor deployments. Add a sensor by its ID." : "No sensors yet. Add a sensor by its ID."),
+    empty: () => (listsAllSensors() ? "WildlifeNL has no active sensor deployments. Add a sensor by its ID." : canListSensors() ? "WildlifeNL lists only the sensors your own account deployed, and there are none. Add a sensor by its ID, or search an area on the live map." : "No sensors yet. Add a sensor by its ID."),
   },
 };
 

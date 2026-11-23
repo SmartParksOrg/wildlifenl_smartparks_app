@@ -58,7 +58,7 @@ A list that exists for everyone and for yourself, such as Reports and My reports
 
 | To see | Role |
 | --- | --- |
-| The animals and their sensors | `herd-manager` sees the active deployments (on the test server, since API 20261123, the ones of their own account); `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map |
+| The animals and their sensors | `herd-manager` sees the active deployments. Since API 20261123, on the test server, that is only the animals their own account put a sensor on; they find the others like the managers below; `nature-area-manager` and `wildlife-manager` find the animals in an area by searching it on the live map |
 | The readings of a sensor: the track, charts and measurements of an animal | `herd-manager` |
 | Detections, reports from others, visits of a living lab | `nature-area-manager`, `wildlife-manager` or `herd-manager` |
 | Zones | `land-user` or `wildlife-manager` |

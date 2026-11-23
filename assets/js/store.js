@@ -139,6 +139,13 @@ export function canListSensors() {
   return hasScope(SCOPES.deployments);
 }
 
+/** Whether the list of deployments holds every animal with a sensor. Since API 20261123 it
+ * holds only the deployments of the account itself, and the other animals are found by
+ * searching an area, as for the accounts that cannot list deployments at all. */
+export function listsAllSensors() {
+  return canListSensors() && !(account.api && account.api.listsOwnDeployments);
+}
+
 /** Whether the account may read the readings of a sensor: its track, charts and measurements. */
 export function canReadReadings() {
   return hasScope(SCOPES.readings);

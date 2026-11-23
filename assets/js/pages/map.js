@@ -12,7 +12,7 @@ import { alarmCause, alarmPlace, contactPlace, loadPeople, onPeople, people, per
 import { listRecords, recordHash, titleOf } from "../records.js";
 import { account, explain, hasScope } from "../session.js";
 import { onSharing, sharing } from "../sharing.js";
-import { canListSensors, canReadReadings, listError, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, refreshSensors, sensorByAnimal, sensorById } from "../store.js";
+import { canListSensors, canReadReadings, listError, listsAllSensors, loadReadings, loadRecent, loadSensors, loadedReadings, recentReadings, refreshSensors, sensorByAnimal, sensorById } from "../store.js";
 import { $, el, facts, formatMoment, icon, note, plural, toast } from "../ui.js";
 import { choices, drawTab, isCustomised, isShown, offerTabs, openTab, resetChoices, show as showRow } from "./map-layers.js";
 
@@ -287,7 +287,7 @@ function drawPanel() {
         selected: isSelected("animals", sensor.id),
         actions: [trackButton(sensor.id), locate("animals", sensor.id, !sensor.place)],
       })),
-    { noun: "animal", groupLabel: "Per species", empty: canListSensors() ? "WildlifeNL has no animals with an active sensor." : searchesAnimals() ? "No animals found yet. Search this view below." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.` },
+    { noun: "animal", groupLabel: "Per species", empty: listsAllSensors() ? "WildlifeNL has no animals with an active sensor." : searchesAnimals() ? "No animals found yet. Search this view below." : `The animals need one of these roles: ${SCOPES.animalsNear.join(", ")}.` },
   );
   // every sensor, to look at the data from the side of the sensor. One that is on an animal
   // is not drawn until it is ticked: its animal is on the map already. Without readings a
@@ -805,7 +805,7 @@ async function reload(force = false) {
     return;
   }
   const problem = listError();
-  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length || canListSensors() ? "" : searchesAnimals() ? "Your account cannot list the animals with a sensor, but it can find them: open Layers and search this view." : "Your account cannot list the animals with a sensor (that needs the herd-manager role). Add a sensor by its ID on the Sensors page.", problem ? "warn" : "");
+  note($("mapNote"), problem ? `Could not list the deployed sensors: ${problem}` : sensors.length || listsAllSensors() ? "" : searchesAnimals() ? (canListSensors() ? "WildlifeNL lists only the animals your own account put a sensor on, and there are none. Find the others: open Layers and search this view." : "Your account cannot list the animals with a sensor, but it can find them: open Layers and search this view.") : "Your account cannot list the animals with a sensor (that needs the herd-manager role). Add a sensor by its ID on the Sensors page.", problem ? "warn" : "");
   redraw();
   locateTheRest();
 }

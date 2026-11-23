@@ -12,7 +12,7 @@
 import { SCOPES } from "./api.js";
 import { circleGrid, coverPlaces, toPoint, toTime } from "./lib.js";
 import { account, explain, hasScope } from "./session.js";
-import { addFound } from "./store.js";
+import { addFound, listsAllSensors } from "./store.js";
 
 /** WildlifeNL answers such a query within at most this many metres of a point. */
 export const MAX_RADIUS_M = 10000;
@@ -47,8 +47,8 @@ export const detections = {
 
 /** The kinds of finds: where the API keeps them, who may ask, where they land. Detections
  * and reports stay where they are, so their places are remembered and asked again. Animals
- * move, so they are only asked when a person searches an area, and only for an account that
- * cannot list the herd's sensors. */
+ * move, so they are only asked when a person searches an area, and only for an account whose
+ * list of deployments does not hold them all. */
 const KINDS = [
   { path: "detections", scope: SCOPES.detections, into: () => detections.found, places: "wnl-detection-places" },
   { path: "interactions", scope: SCOPES.reports, into: () => detections.reports, places: "wnl-report-places" },
@@ -57,7 +57,7 @@ const KINDS = [
 
 /** The kinds this account may ask; `area` says a person searches an area. */
 function kindsFor(area) {
-  return KINDS.filter((kind) => hasScope(kind.scope) && (!kind.moving || (area && !hasScope(SCOPES.deployments))));
+  return KINDS.filter((kind) => hasScope(kind.scope) && (!kind.moving || (area && !listsAllSensors())));
 }
 
 const listeners = new Set();

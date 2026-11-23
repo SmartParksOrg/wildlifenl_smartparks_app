@@ -13,7 +13,7 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The animals and sensors show again on the test server. WildlifeNL API `20261123` moved the active deployments to `GET /borne-sensor-deployment/me/active/`; the app now uses that path and falls back to `/borne-sensor-deployment/active/` on a server that still has it.
+- The animals and sensors show again on the test server. WildlifeNL API `20261123` moved the active deployments to `GET /borne-sensor-deployment/me/active/`; the app now uses that path and falls back to `/borne-sensor-deployment/active/` on a server that still has it. That path lists only the deployments of the account itself, so a herd manager now finds the other animals by searching an area on the live map, and an empty list says so.
 
 ### Changed
 
